@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Brain" />
+<meta name="theme-color" content="#181818" />
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23181818'/><circle cx='90' cy='90' r='38' fill='%23bef264'/><circle cx='40' cy='50' r='10' fill='%23b8b8b8'/><circle cx='140' cy='50' r='10' fill='%23b8b8b8'/><circle cx='140' cy='130' r='10' fill='%23b8b8b8'/><circle cx='40' cy='130' r='10' fill='%23b8b8b8'/></svg>" />
+<title>Brain — mobile</title>
+
+<!-- Brain data (loaded if hosted alongside index.js / feed.js / questions.js) -->
+<script src="index.js" onerror="window.__noIndex=true"></script>
+<script src="feed.js" onerror="window.__noFeed=true"></script>
+<script src="questions.js" onerror="window.BRAIN_QUESTIONS = window.BRAIN_QUESTIONS || []"></script>
+
+<style>
+  :root{
+    --bg:#181818; --bg2:#1f1f1f; --panel:rgba(255,255,255,0.04);
+    --panel-border:rgba(255,255,255,0.08);
+    --text:#e8e8e8; --text-dim:#bcbcbc; --text-faint:#888;
+    --node:#b8b8b8; --accent:#bef264; --accent-dim:#86a046;
+    --danger:#ff8a8a;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-bot:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,Inter,'Segoe UI',Roboto,sans-serif;
+    overscroll-behavior-y:contain;
+  }
+  body{min-height:100vh;display:flex;flex-direction:column;padding-top:var(--safe-top)}
+
+  /* HEADER */
+  .hdr{
+    position:sticky;top:0;z-index:20;background:rgba(24,24,24,0.92);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--panel-border);
+    padding:10px 14px;display:flex;align-items:center;gap:10px;
+  }
+  .hdr .logo{
+    width:30px;height:30px;border-radius:50%;background:var(--accent);
+    display:grid;place-items:center;color:#1a1a1a;font-weight:700;font-size:14px;
+    box-shadow:0 0 22px rgba(190,242,100,0.32);
+  }
+  .hdr h1{font-size:15px;margin:0;font-weight:600;letter-spacing:0.01em}
+  .hdr .sub{font-size:10.5px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;margin-top:2px}
+  .hdr-meta{flex:1;min-width:0}
+  .hdr-right{font-size:10.5px;color:var(--text-faint);letter-spacing:0.06em}
+
+  /* TAB BAR (bottom) */
+  .tabs{
+    position:sticky;bottom:0;z-index:20;background:rgba(24,24,24,0.95);
+    backdrop-filter:blur(14px);border-top:1px solid var(--panel-border);
+    display:grid;grid-template-columns:repeat(5,1fr);
+    padding:6px 0 calc(6px + var(--safe-bot));
+  }
+  .tab .qdot{
+    position:absolute;top:6px;right:24%;width:14px;height:14px;border-radius:50%;
+    background:#7aa6ff;color:#0a0a14;font-size:9px;font-weight:700;
+    display:none;align-items:center;justify-content:center;
+  }
+  .tab .qdot.show{display:flex}
+  .tab{position:relative}
+  .tab{
+    background:none;border:none;color:var(--text-faint);
+    padding:8px 4px;font-family:inherit;font-size:10.5px;letter-spacing:0.08em;
+    text-transform:uppercase;cursor:pointer;display:flex;flex-direction:column;
+    align-items:center;gap:2px;
+  }
+  .tab .ic{font-size:18px;line-height:1}
+  .tab.active{color:var(--accent)}
+
+  /* PAGE WRAPPER */
+  .page{flex:1;overflow-y:auto;padding:14px 14px 18px;-webkit-overflow-scrolling:touch}
+  .page.hidden{display:none}
+
+  /* CAPTURE PAGE */
+  .capture-card{
+    background:rgba(190,242,100,0.06);border:1px solid rgba(190,242,100,0.22);
+    border-radius:14px;padding:14px;
+  }
+  .capture-card h3{margin:0 0 8px;color:var(--accent);font-size:11px;letter-spacing:0.12em;text-transform:uppercase}
+  .capture-hint{font-size:12px;color:var(--text-dim);margin:0 0 10px;line-height:1.45}
+  .capture-hint b{color:var(--accent)}
+  textarea.cap{
+    width:100%;background:rgba(0,0,0,0.32);border:1px solid var(--panel-border);
+    border-radius:10px;color:var(--text);font-family:inherit;font-size:15px;
+    padding:12px 14px;resize:vertical;min-height:130px;outline:none;line-height:1.5;
+  }
+  textarea.cap:focus{border-color:var(--accent)}
+  .target-row{margin-top:12px}
+  .target-row label{font-size:10.5px;color:var(--text-faint);letter-spacing:0.10em;text-transform:uppercase;display:block;margin-bottom:6px}
+  .target-input-wrap{position:relative}
+  input.target-search{
+    width:100%;background:rgba(0,0,0,0.32);border:1px solid var(--panel-border);
+    border-radius:8px;color:var(--text);font-family:inherit;font-size:14px;
+    padding:10px 12px;outline:none;
+  }
+  input.target-search:focus{border-color:var(--accent)}
+  .target-results{
+    position:absolute;left:0;right:0;top:calc(100% + 4px);
+    background:#222;border:1px solid var(--panel-border);border-radius:8px;
+    max-height:260px;overflow-y:auto;z-index:5;display:none;
+  }
+  .target-results.open{display:block}
+  .tr-item{padding:9px 12px;font-size:13px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  .tr-item:last-child{border-bottom:none}
+  .tr-item:hover,.tr-item.kbd{background:rgba(255,255,255,0.05);color:var(--text)}
+  .tr-item .pdot{width:6px;height:6px;border-radius:50%;background:var(--node);flex-shrink:0}
+  .tr-item .pdot.green{background:var(--accent)}
+  .tr-item .ttype{margin-left:auto;font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em}
+  .target-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    background:rgba(190,242,100,0.10);border:1px solid rgba(190,242,100,0.3);
+    color:var(--accent);font-size:13px;padding:6px 10px;border-radius:8px;
+    margin-top:8px;
+  }
+  .target-chip button{
+    background:none;border:none;color:var(--accent);font-size:14px;cursor:pointer;padding:0;line-height:1;
+  }
+
+  .btn-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .btn{
+    background:var(--accent);color:#1a1a1a;border:none;border-radius:10px;
+    padding:13px 18px;font-family:inherit;font-size:14.5px;font-weight:600;
+    cursor:pointer;flex:1;min-height:48px;
+  }
+  .btn:active{transform:scale(0.97)}
+  .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--panel-border);font-weight:500}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  .btn .ic{margin-right:6px}
+
+  .preview{
+    margin-top:14px;padding:10px 12px;background:rgba(0,0,0,0.32);
+    border:1px solid var(--panel-border);border-radius:10px;
+    font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:11.5px;
+    color:var(--text-dim);white-space:pre-wrap;word-break:break-word;
+    max-height:220px;overflow-y:auto;
+  }
+  .preview .lbl{display:block;font-family:inherit;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;font-weight:600}
+
+  .mode-row{
+    display:flex;gap:6px;margin-bottom:14px;background:rgba(0,0,0,0.25);
+    border:1px solid var(--panel-border);border-radius:10px;padding:4px;
+  }
+  .mode-row button{
+    flex:1;background:none;border:none;color:var(--text-faint);
+    font-family:inherit;font-size:12px;font-weight:600;padding:9px;
+    border-radius:7px;cursor:pointer;letter-spacing:0.04em;
+  }
+  .mode-row button.active{background:rgba(190,242,100,0.15);color:var(--accent)}
+
+  .voice-tip{
+    margin-top:12px;padding:10px 12px;background:rgba(0,0,0,0.20);
+    border:1px dashed var(--panel-border);border-radius:8px;
+    font-size:11.5px;color:var(--text-faint);line-height:1.5;
+  }
+  .voice-tip b{color:var(--text-dim)}
+
+  /* BROWSE PAGE */
+  .search-bar{
+    display:flex;gap:8px;margin-bottom:12px;
+  }
+  .search-bar input{
+    flex:1;background:rgba(0,0,0,0.32);border:1px solid var(--panel-border);
+    border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;
+    padding:11px 14px;outline:none;
+  }
+  .search-bar input:focus{border-color:var(--accent)}
+  .filter-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{
+    background:rgba(255,255,255,0.05);border:1px solid var(--panel-border);
+    color:var(--text-dim);font-size:11px;padding:6px 10px;border-radius:99px;
+    cursor:pointer;letter-spacing:0.04em;
+  }
+  .chip.on{background:rgba(190,242,100,0.15);color:var(--accent);border-color:rgba(190,242,100,0.4)}
+  .node-list{display:flex;flex-direction:column;gap:4px}
+  .node-row{
+    background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);
+    border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:10px;
+    cursor:pointer;transition:background .1s;min-height:54px;
+  }
+  .node-row:active{background:rgba(255,255,255,0.07)}
+  .node-row .dot{width:8px;height:8px;border-radius:50%;background:var(--node);flex-shrink:0}
+  .node-row .dot.green{background:var(--accent);box-shadow:0 0 10px rgba(190,242,100,0.5)}
+  .node-row .meta{flex:1;min-width:0}
+  .node-row .name{font-size:14px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .node-row .sub{font-size:11px;color:var(--text-faint);letter-spacing:0.04em;margin-top:2px}
+  .node-row .badge{
+    font-size:10px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;
+    background:rgba(255,255,255,0.05);padding:3px 7px;border-radius:5px;flex-shrink:0;
+  }
+
+  /* INSPECT (overlay) */
+  .inspect{
+    position:fixed;inset:0;background:var(--bg);z-index:30;
+    display:flex;flex-direction:column;
+    padding-top:calc(10px + var(--safe-top));padding-bottom:var(--safe-bot);
+    transform:translateX(100%);transition:transform .2s;
+    overflow-y:auto;
+  }
+  .inspect.open{transform:translateX(0)}
+  .inspect-hdr{
+    padding:10px 14px 8px;display:flex;align-items:center;gap:10px;
+    border-bottom:1px solid var(--panel-border);
+  }
+  .inspect-hdr button.back{
+    background:none;border:none;color:var(--text);font-size:18px;padding:6px 10px;
+    cursor:pointer;
+  }
+  .inspect-hdr .ttl{flex:1;min-width:0}
+  .inspect-hdr h2{margin:0;font-size:16px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .inspect-hdr .mt{font-size:10.5px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;margin-top:2px}
+  .inspect-body{padding:14px;flex:1}
+  .insp-section{margin-bottom:18px}
+  .insp-section h4{font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin:0 0 8px;font-weight:600}
+  .insp-summary{font-size:13.5px;color:var(--text-dim);line-height:1.6;white-space:pre-wrap}
+  .insp-path{font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:11px;color:var(--text-faint);background:rgba(0,0,0,0.3);padding:8px 10px;border-radius:6px;word-break:break-all}
+  .insp-conn{display:flex;flex-direction:column;gap:4px}
+  .insp-conn .row{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;
+    background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);border-radius:8px;
+    font-size:13px;color:var(--text-dim);cursor:pointer;min-height:46px;
+  }
+  .insp-conn .row .dot{width:6px;height:6px;border-radius:50%;background:var(--node)}
+  .insp-conn .row .dot.green{background:var(--accent)}
+  .insp-conn .row .lbl{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .insp-conn .row .typ{font-size:9.5px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-faint)}
+  .insp-conn .row .arr{font-size:11px;color:var(--text-faint)}
+  .insp-annot{font-size:11.5px;font-style:italic;color:var(--text-faint);padding:0 12px 4px 22px;line-height:1.4}
+  .insp-action-row{display:flex;gap:8px;margin-top:8px}
+  .insp-action-row .btn{flex:1}
+
+  /* FEED PAGE */
+  .feed-item{
+    background:rgba(255,255,255,0.03);border:1px solid var(--panel-border);
+    border-radius:10px;padding:11px 14px;margin-bottom:8px;
+  }
+  .feed-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+  .feed-actor{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600}
+  .feed-actor.claude{color:var(--accent)}
+  .feed-actor.kam{color:#7aa6ff}
+  .feed-op{font-size:10px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase}
+  .feed-ts{margin-left:auto;font-size:10px;color:var(--text-faint)}
+  .feed-note{font-size:12.5px;color:var(--text-dim);line-height:1.5}
+
+  /* QUESTIONS PAGE */
+  .q-item{
+    background:rgba(122,166,255,0.05);border:1px solid rgba(122,166,255,0.20);
+    border-radius:12px;padding:13px 14px;margin-bottom:10px;
+  }
+  .q-item.answered{opacity:0.55;background:rgba(255,255,255,0.03);border-color:var(--panel-border)}
+  .q-item .q-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:10px;letter-spacing:0.10em;text-transform:uppercase}
+  .q-item .q-head .pri{color:#7aa6ff;font-weight:600}
+  .q-item .q-head .pri.high{color:#ff8a8a}
+  .q-item .q-head .pri.low{color:var(--text-faint)}
+  .q-item .q-head .node{color:var(--accent);text-transform:none;letter-spacing:0;font-size:11px;font-weight:600}
+  .q-item .q-head .ts{margin-left:auto;color:var(--text-faint)}
+  .q-item .q-text{font-size:13.5px;color:var(--text);line-height:1.5;margin-bottom:6px}
+  .q-item.answered .q-text{text-decoration:line-through}
+  .q-item .q-ctx{font-size:11.5px;color:var(--text-faint);font-style:italic;line-height:1.45;margin-bottom:8px}
+  .q-item textarea{
+    width:100%;background:rgba(0,0,0,0.32);border:1px solid var(--panel-border);
+    border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;
+    padding:10px 12px;resize:vertical;min-height:80px;outline:none;
+  }
+  .q-item textarea:focus{border-color:#7aa6ff}
+  .q-item .q-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .q-item .q-actions .btn{padding:9px 14px;font-size:12.5px;min-height:0;flex:0 1 auto}
+  .q-item .q-actions .btn.answer{background:#7aa6ff;color:#0a0a14}
+  .q-item .q-answered-line{font-size:12px;color:var(--accent);line-height:1.5;margin-top:6px}
+
+  /* ASK PAGE */
+  .ask-card{
+    background:rgba(122,166,255,0.06);border:1px solid rgba(122,166,255,0.25);
+    border-radius:14px;padding:14px;margin-bottom:14px;
+  }
+  .ask-card h3{margin:0 0 6px;color:#7aa6ff;font-size:11px;letter-spacing:0.12em;text-transform:uppercase}
+  .ask-card .desc{font-size:12px;color:var(--text-dim);line-height:1.5;margin-bottom:10px}
+
+  /* TOAST */
+  .toast{
+    position:fixed;bottom:calc(78px + var(--safe-bot));left:50%;transform:translateX(-50%);z-index:100;
+    background:rgba(40,40,40,0.96);backdrop-filter:blur(10px);
+    border:1px solid var(--accent);border-radius:10px;padding:11px 18px;
+    color:var(--accent);font-size:13px;font-weight:600;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+
+  /* EMPTY STATES */
+  .empty{
+    text-align:center;padding:36px 20px;color:var(--text-faint);
+    font-size:13px;line-height:1.6;
+  }
+  .empty .ic{font-size:32px;display:block;margin-bottom:12px;opacity:0.4}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="logo">B</div>
+  <div class="hdr-meta">
+    <h1>Brain</h1>
+    <div class="sub">Mobile · Kam</div>
+  </div>
+  <div class="hdr-right" id="status-pill">—</div>
+</header>
+
+<!-- CAPTURE PAGE -->
+<main class="page" id="page-capture">
+  <div class="mode-row" id="mode-row">
+    <button data-mode="fact" class="active">Add fact</button>
+    <button data-mode="annotate">Annotate</button>
+    <button data-mode="disconnect">Disconnect</button>
+  </div>
+
+  <div class="capture-card">
+    <h3 id="cap-title">Add a fact</h3>
+    <p class="capture-hint" id="cap-hint">Speak or type a thought. I'll attach it to a node and queue a SYNC BRAIN action you can paste into Claude.</p>
+
+    <textarea class="cap" id="cap-text" placeholder="e.g. Libby's middle name is Marie" autocapitalize="sentences" autocomplete="off"></textarea>
+
+    <div class="target-row" id="target-row">
+      <label>Attach to</label>
+      <div class="target-input-wrap">
+        <input class="target-search" id="target-search" placeholder="Search a node (person, file, client...)" autocomplete="off" />
+        <div class="target-results" id="target-results"></div>
+      </div>
+      <div id="target-chip-wrap"></div>
+    </div>
+
+    <div id="edge-picker" style="display:none;margin-top:12px"></div>
+
+    <div class="btn-row">
+      <button class="btn" id="send-btn"><span class="ic">⎘</span>Copy + open Claude</button>
+      <button class="btn ghost" id="clear-btn">Clear</button>
+    </div>
+
+    <div class="voice-tip">
+      <b>Voice tip:</b> tap the textarea, then tap the mic icon on your iPhone keyboard (left of spacebar). Dictate naturally — punctuation comes through.
+    </div>
+
+    <div class="preview" id="preview" style="display:none">
+      <span class="lbl">Payload (auto-copied)</span>
+      <div id="preview-body"></div>
+    </div>
+  </div>
+</main>
+
+<!-- BROWSE PAGE -->
+<main class="page hidden" id="page-browse">
+  <div class="search-bar">
+    <input id="browse-search" placeholder="Search nodes (Libby, Parmer, working-style...)" autocomplete="off" />
+  </div>
+  <div class="filter-chips" id="filter-chips"></div>
+  <div class="node-list" id="node-list"></div>
+</main>
+
+<!-- ASK PAGE -->
+<main class="page hidden" id="page-ask">
+  <div class="ask-card">
+    <h3>Ask Claude</h3>
+    <p class="desc">Type a question. We'll bundle it with the relevant brain context so when you paste into Claude, the answer lands in seconds.</p>
+    <textarea class="cap" id="ask-text" placeholder="e.g. What's the status of the Parmer rev rec migration?" autocapitalize="sentences"></textarea>
+    <div class="target-row">
+      <label>Optional · scope to a node</label>
+      <div class="target-input-wrap">
+        <input class="target-search" id="ask-target-search" placeholder="Leave blank for general question" autocomplete="off" />
+        <div class="target-results" id="ask-target-results"></div>
+      </div>
+      <div id="ask-target-chip-wrap"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="ask-send-btn"><span class="ic">⎘</span>Copy + open Claude</button>
+      <button class="btn ghost" id="ask-clear-btn">Clear</button>
+    </div>
+    <div class="preview" id="ask-preview" style="display:none">
+      <span class="lbl">Prompt (auto-copied)</span>
+      <div id="ask-preview-body"></div>
+    </div>
+  </div>
+</main>
+
+<!-- QUESTIONS PAGE -->
+<main class="page hidden" id="page-questions">
+  <div id="questions-list"></div>
+</main>
+
+<!-- FEED PAGE -->
+<main class="page hidden" id="page-feed">
+  <div id="feed-list"></div>
+</main>
+
+<!-- INSPECT OVERLAY -->
+<div class="inspect" id="inspect">
+  <div class="inspect-hdr">
+    <button class="back" id="inspect-back">← Back</button>
+    <div class="ttl">
+      <h2 id="inspect-title">—</h2>
+      <div class="mt" id="inspect-meta">—</div>
+    </div>
+  </div>
+  <div class="inspect-body" id="inspect-body"></div>
+</div>
+
+<!-- BOTTOM TABS -->
+<nav class="tabs">
+  <button class="tab active" data-page="capture"><span class="ic">＋</span>Capture</button>
+  <button class="tab" data-page="browse"><span class="ic">◎</span>Browse</button>
+  <button class="tab" data-page="ask"><span class="ic">?</span>Ask</button>
+  <button class="tab" data-page="questions"><span class="ic">!</span>Q's<span class="qdot" id="q-badge"></span></button>
+  <button class="tab" data-page="feed"><span class="ic">⟳</span>Feed</button>
+</nav>
+
+<div class="toast" id="toast">Copied ✓</div>
+
+<script>
+"use strict";
+(() => {
+  // ============ DATA + STATE
+  const INDEX = window.BRAIN_INDEX || { nodes:[], edges:[], categories:[] };
+  const FEED = window.BRAIN_FEED || [];
+  const QUESTIONS = window.BRAIN_QUESTIONS || [];
+  const status = document.getElementById('status-pill');
+  if(window.__noIndex || !INDEX.nodes.length){
+    status.textContent = 'NO DATA';
+    status.style.color = '#ff8a8a';
+  } else {
+    status.textContent = INDEX.nodes.length + ' nodes';
+    status.style.color = 'var(--accent-dim)';
+  }
+
+  const escapeHtml = (s) => (s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+  const $ = (id) => document.getElementById(id);
+  const STATE = { page:'capture', mode:'fact', target:null, askTarget:null, edgeChoice:null };
+
+  // ============ TAB SWITCHING
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => switchPage(t.dataset.page));
+  });
+  function switchPage(p){
+    STATE.page = p;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.page === p));
+    document.querySelectorAll('.page').forEach(pg => pg.classList.add('hidden'));
+    $('page-' + p).classList.remove('hidden');
+    if(p === 'browse') renderBrowse();
+    if(p === 'feed') renderFeed();
+    if(p === 'questions') renderQuestions();
+  }
+
+  function renderQBadge(){
+    const open = QUESTIONS.filter(q => q.status === 'open').length;
+    const badge = $('q-badge');
+    badge.textContent = open || '';
+    badge.classList.toggle('show', open > 0);
+  }
+
+  // ============ MODE TOGGLE (capture page)
+  document.querySelectorAll('#mode-row button').forEach(b => {
+    b.addEventListener('click', () => {
+      STATE.mode = b.dataset.mode;
+      document.querySelectorAll('#mode-row button').forEach(x => x.classList.toggle('active', x === b));
+      updateModeUI();
+    });
+  });
+  function updateModeUI(){
+    const m = STATE.mode;
+    $('cap-title').textContent = m === 'fact' ? 'Add a fact' : m === 'annotate' ? 'Annotate a connection' : 'Disconnect two nodes';
+    $('cap-hint').innerHTML = m === 'fact'
+      ? 'Speak or type a thought. I\'ll attach it to a node and queue a <b>SYNC BRAIN</b> action you can paste into Claude.'
+      : m === 'annotate'
+        ? 'Pick a node, pick which connection of it is being clarified, and type why those two are linked (or what I got wrong).'
+        : 'Pick a node, pick which connection should be removed, and (optionally) type why so I don\'t reconnect them.';
+    $('target-row').querySelector('label').textContent = m === 'fact' ? 'Attach to' : 'Node';
+    $('edge-picker').style.display = (m === 'annotate' || m === 'disconnect') && STATE.target ? 'block' : 'none';
+    $('cap-text').placeholder = m === 'fact'
+      ? 'e.g. Libby\'s middle name is Marie'
+      : m === 'annotate'
+        ? 'e.g. Karl was Kam\'s personal VA before Aleph. Now full-time as support@aleph-mgmt.com.'
+        : 'e.g. (Optional) Karl never had anything to do with Cross Mgmt. That edge was wrong.';
+    refreshSendBtn();
+  }
+
+  // ============ TARGET SEARCH (capture + ask pages share logic)
+  function attachSearch(inputId, resultsId, chipWrapId, onSelect){
+    const input = $(inputId);
+    const results = $(resultsId);
+    const chipWrap = $(chipWrapId);
+    let kbdIdx = 0;
+
+    function render(){
+      const q = input.value.trim().toLowerCase();
+      if(!q){ results.classList.remove('open'); results.innerHTML = ''; return; }
+      const hits = INDEX.nodes
+        .map(n => ({ n, score: scoreMatch(n, q) }))
+        .filter(x => x.score > 0)
+        .sort((a,b) => b.score - a.score)
+        .slice(0, 14);
+      if(hits.length === 0){ results.innerHTML = '<div class="tr-item" style="color:var(--text-faint);font-style:italic">No match</div>'; results.classList.add('open'); return; }
+      results.innerHTML = hits.map(({n}, i) => `
+        <div class="tr-item ${i===0?'kbd':''}" data-id="${escapeHtml(n.id)}">
+          <span class="pdot ${n.highlight?'green':''}"></span>
+          <span class="lbl">${escapeHtml(n.label)}</span>
+          <span class="ttype">${escapeHtml(n.type||'')}</span>
+        </div>
+      `).join('');
+      results.classList.add('open');
+      results.querySelectorAll('.tr-item[data-id]').forEach(el => {
+        el.addEventListener('click', () => { onSelect(el.dataset.id); input.value = ''; results.classList.remove('open'); });
+      });
+    }
+    function scoreMatch(n, q){
+      const lbl = (n.label||'').toLowerCase();
+      if(lbl === q) return 100;
+      if(lbl.startsWith(q)) return 60;
+      if(lbl.includes(q)) return 40;
+      if((n.id||'').toLowerCase().includes(q)) return 20;
+      if((n.summary||'').toLowerCase().includes(q)) return 10;
+      if((n.body||'').toLowerCase().includes(q)) return 5;
+      return 0;
+    }
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', () => setTimeout(() => results.classList.remove('open'), 180));
+
+    return {
+      setChip(node){
+        if(!node){ chipWrap.innerHTML = ''; return; }
+        chipWrap.innerHTML = `
+          <div class="target-chip">
+            <span>📎 ${escapeHtml(node.label)}</span>
+            <button aria-label="Clear" data-clear>✕</button>
+          </div>
+        `;
+        chipWrap.querySelector('[data-clear]').addEventListener('click', () => { onSelect(null); });
+      }
+    };
+  }
+
+  const capSearch = attachSearch('target-search', 'target-results', 'target-chip-wrap', (id) => {
+    STATE.target = id ? INDEX.nodes.find(n => n.id === id) : null;
+    capSearch.setChip(STATE.target);
+    updateModeUI();
+    renderEdgePicker();
+    refreshSendBtn();
+  });
+  const askSearch = attachSearch('ask-target-search', 'ask-target-results', 'ask-target-chip-wrap', (id) => {
+    STATE.askTarget = id ? INDEX.nodes.find(n => n.id === id) : null;
+    askSearch.setChip(STATE.askTarget);
+  });
+
+  // ============ EDGE PICKER (annotate / disconnect)
+  function renderEdgePicker(){
+    const wrap = $('edge-picker');
+    if(!STATE.target || STATE.mode === 'fact'){ wrap.style.display='none'; wrap.innerHTML=''; STATE.edgeChoice=null; return; }
+    const id = STATE.target.id;
+    const out = INDEX.edges.filter(e => e.source === id).map(e => ({...e, dir:'out'}));
+    const inc = INDEX.edges.filter(e => e.target === id).map(e => ({...e, dir:'in'}));
+    const all = [...out, ...inc];
+    if(all.length === 0){
+      wrap.innerHTML = '<div class="voice-tip">No connections on this node yet.</div>';
+      wrap.style.display = 'block';
+      return;
+    }
+    wrap.style.display = 'block';
+    wrap.innerHTML = `
+      <label style="font-size:10.5px;color:var(--text-faint);letter-spacing:0.10em;text-transform:uppercase;display:block;margin-bottom:6px">Which connection</label>
+      <div class="insp-conn">
+        ${all.map((e,i) => {
+          const otherId = e.dir === 'out' ? e.target : e.source;
+          const other = INDEX.nodes.find(nn => nn.id === otherId);
+          if(!other) return '';
+          return `<div class="row" data-i="${i}" data-other="${escapeHtml(other.id)}" data-type="${escapeHtml(e.type)}" data-dir="${e.dir}">
+            <span class="dot ${other.highlight?'green':''}"></span>
+            <span class="arr">${e.dir==='out'?'→':'←'}</span>
+            <span class="lbl">${escapeHtml(other.label)}</span>
+            <span class="typ">${escapeHtml(e.type)}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+    wrap.querySelectorAll('.row').forEach(r => {
+      r.addEventListener('click', () => {
+        wrap.querySelectorAll('.row').forEach(x => x.style.background = '');
+        r.style.background = 'rgba(190,242,100,0.10)';
+        r.style.borderColor = 'rgba(190,242,100,0.4)';
+        const dir = r.dataset.dir;
+        const otherId = r.dataset.other;
+        const src = dir === 'out' ? STATE.target.id : otherId;
+        const tgt = dir === 'out' ? otherId : STATE.target.id;
+        STATE.edgeChoice = { source: src, target: tgt, type: r.dataset.type };
+        refreshSendBtn();
+      });
+    });
+  }
+
+  // ============ SEND BUTTON
+  function refreshSendBtn(){
+    const text = $('cap-text').value.trim();
+    const btn = $('send-btn');
+    if(STATE.mode === 'fact'){
+      btn.disabled = !text || !STATE.target;
+    } else if(STATE.mode === 'annotate'){
+      btn.disabled = !text || !STATE.edgeChoice;
+    } else {
+      // disconnect: text optional, edge required
+      btn.disabled = !STATE.edgeChoice;
+    }
+  }
+  $('cap-text').addEventListener('input', refreshSendBtn);
+
+  // ============ BUILD SYNC PAYLOAD + COPY + OPEN CLAUDE
+  $('send-btn').addEventListener('click', () => {
+    const text = $('cap-text').value.trim();
+    let action;
+    if(STATE.mode === 'fact'){
+      action = {
+        type: 'add-fact',
+        targetId: STATE.target.id,
+        targetLabel: STATE.target.label,
+        targetPath: STATE.target.path || null,
+        fact: text
+      };
+    } else if(STATE.mode === 'annotate'){
+      action = {
+        type: 'annotate-edge',
+        edge: STATE.edgeChoice,
+        annotation: text
+      };
+    } else {
+      action = {
+        type: 'remove-edge',
+        edge: STATE.edgeChoice,
+        reason: text || null
+      };
+    }
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      source: 'brain-mobile.html',
+      actions: [action]
+    };
+    const block = 'SYNC BRAIN ACTIONS:\n```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+    copyAndOpen(block);
+    $('preview-body').textContent = block;
+    $('preview').style.display = 'block';
+  });
+
+  $('clear-btn').addEventListener('click', () => {
+    $('cap-text').value = '';
+    STATE.target = null; STATE.edgeChoice = null;
+    capSearch.setChip(null);
+    $('preview').style.display = 'none';
+    updateModeUI(); refreshSendBtn();
+  });
+
+  // ============ ASK
+  $('ask-send-btn').addEventListener('click', () => {
+    const q = $('ask-text').value.trim();
+    if(!q){ toast('Type a question first'); return; }
+    let prompt = q;
+    if(STATE.askTarget){
+      const n = STATE.askTarget;
+      prompt = `Question about brain node "${n.label}" (id: ${n.id}):\n\n${q}\n\n(Pull whatever's in ${n.path || n.id} and answer concisely.)`;
+    }
+    copyAndOpen(prompt);
+    $('ask-preview-body').textContent = prompt;
+    $('ask-preview').style.display = 'block';
+  });
+  $('ask-clear-btn').addEventListener('click', () => {
+    $('ask-text').value = '';
+    STATE.askTarget = null;
+    askSearch.setChip(null);
+    $('ask-preview').style.display = 'none';
+  });
+
+  // ============ COPY + OPEN CLAUDE
+  function copyAndOpen(text){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(() => {
+        toast('Copied ✓ — opening Claude');
+        // Try to open the Claude iOS app via universal link, fall back to web
+        const t = setTimeout(() => { window.location.href = 'https://claude.ai/new'; }, 250);
+        // If Claude app is installed, the universal link below intercepts and the timeout above gets killed
+        window.location.href = 'claude://chat?prompt=' + encodeURIComponent(text);
+      }, () => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+  function fallbackCopy(text){
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('Copied ✓'); } catch(e){ toast('Copy failed — long-press to copy'); }
+    document.body.removeChild(ta);
+  }
+
+  // ============ TOAST
+  let toastTimer = null;
+  function toast(msg){
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ============ BROWSE PAGE
+  function renderFilterChips(){
+    const wrap = $('filter-chips');
+    const cats = INDEX.categories || [];
+    const html = ['<button class="chip on" data-cat="">All (' + INDEX.nodes.length + ')</button>']
+      .concat(cats.map(c => {
+        const cnt = INDEX.nodes.filter(n => n.category === c.id).length;
+        return `<button class="chip" data-cat="${escapeHtml(c.id)}">${escapeHtml(c.name)} (${cnt})</button>`;
+      }))
+      .concat('<button class="chip" data-cat="__green">Recent ✦</button>');
+    wrap.innerHTML = html.join('');
+    wrap.querySelectorAll('.chip').forEach(c => {
+      c.addEventListener('click', () => {
+        wrap.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+        renderBrowse();
+      });
+    });
+  }
+  function renderBrowse(){
+    if(!$('filter-chips').children.length) renderFilterChips();
+    const q = $('browse-search').value.trim().toLowerCase();
+    const active = document.querySelector('#filter-chips .chip.on');
+    const cat = active ? active.dataset.cat : '';
+    let nodes = INDEX.nodes.slice();
+    if(cat === '__green') nodes = nodes.filter(n => n.highlight);
+    else if(cat) nodes = nodes.filter(n => n.category === cat);
+    if(q) nodes = nodes.filter(n => (n.label||'').toLowerCase().includes(q) || (n.id||'').toLowerCase().includes(q));
+    // sort: highlight first, then weight desc, then label
+    nodes.sort((a,b) => (b.highlight?1:0) - (a.highlight?1:0) || (b.weight||0) - (a.weight||0) || (a.label||'').localeCompare(b.label||''));
+    const list = $('node-list');
+    if(nodes.length === 0){
+      list.innerHTML = '<div class="empty"><span class="ic">◎</span>No nodes match.</div>';
+      return;
+    }
+    list.innerHTML = nodes.slice(0, 300).map(n => {
+      const cat = INDEX.categories.find(c => c.id === n.category);
+      return `<div class="node-row" data-id="${escapeHtml(n.id)}">
+        <span class="dot ${n.highlight?'green':''}"></span>
+        <div class="meta">
+          <div class="name">${escapeHtml(n.label)}</div>
+          <div class="sub">${escapeHtml((n.type||'').toUpperCase())}${cat?' · '+escapeHtml(cat.name):''}</div>
+        </div>
+        <span class="badge">${escapeHtml(n.id)}</span>
+      </div>`;
+    }).join('');
+    if(nodes.length > 300){
+      list.innerHTML += '<div class="empty" style="padding:18px">Showing 300 of ' + nodes.length + '. Refine search.</div>';
+    }
+    list.querySelectorAll('.node-row').forEach(r => {
+      r.addEventListener('click', () => openInspect(r.dataset.id));
+    });
+  }
+  $('browse-search').addEventListener('input', renderBrowse);
+
+  // ============ INSPECT OVERLAY
+  function openInspect(id){
+    const n = INDEX.nodes.find(x => x.id === id);
+    if(!n) return;
+    $('inspect-title').textContent = n.label;
+    const cat = INDEX.categories.find(c => c.id === n.category);
+    $('inspect-meta').textContent = (n.type||'').toUpperCase() + (n.kind?' · '+n.kind.toUpperCase():'') + (cat?' · '+cat.name:'');
+    const out = INDEX.edges.filter(e => e.source === id).map(e => ({...e, dir:'out'}));
+    const inc = INDEX.edges.filter(e => e.target === id).map(e => ({...e, dir:'in'}));
+    const all = [...out, ...inc];
+
+    let html = '';
+    if(n.summary) html += `<div class="insp-section"><h4>Summary</h4><div class="insp-summary">${escapeHtml(n.summary)}</div></div>`;
+    if(n.body) html += `<div class="insp-section"><h4>Body</h4><div class="insp-summary">${escapeHtml(n.body)}</div></div>`;
+    if(n.path) html += `<div class="insp-section"><h4>Path</h4><div class="insp-path">${escapeHtml(n.path)}</div></div>`;
+    if(all.length){
+      html += '<div class="insp-section"><h4>Connections (' + all.length + ')</h4><div class="insp-conn">';
+      all.forEach(e => {
+        const otherId = e.dir === 'out' ? e.target : e.source;
+        const other = INDEX.nodes.find(nn => nn.id === otherId);
+        if(!other) return;
+        html += `<div class="row" data-id="${escapeHtml(other.id)}">
+          <span class="dot ${other.highlight?'green':''}"></span>
+          <span class="arr">${e.dir==='out'?'→':'←'}</span>
+          <span class="lbl">${escapeHtml(other.label)}</span>
+          <span class="typ">${escapeHtml(e.type)}</span>
+        </div>`;
+        if(e.annotation){
+          html += `<div class="insp-annot">\u201C${escapeHtml(e.annotation)}\u201D</div>`;
+        }
+      });
+      html += '</div></div>';
+    }
+    html += `
+      <div class="insp-section">
+        <h4>Quick actions</h4>
+        <div class="insp-action-row">
+          <button class="btn" data-act="addfact">Add fact</button>
+          <button class="btn ghost" data-act="ask">Ask about this</button>
+        </div>
+      </div>
+    `;
+    $('inspect-body').innerHTML = html;
+    $('inspect-body').querySelectorAll('.insp-conn .row[data-id]').forEach(r => {
+      r.addEventListener('click', () => openInspect(r.dataset.id));
+    });
+    $('inspect-body').querySelectorAll('[data-act]').forEach(b => {
+      b.addEventListener('click', () => {
+        closeInspect();
+        if(b.dataset.act === 'addfact'){
+          switchPage('capture');
+          STATE.mode = 'fact';
+          document.querySelectorAll('#mode-row button').forEach(x => x.classList.toggle('active', x.dataset.mode === 'fact'));
+          STATE.target = n; capSearch.setChip(n); updateModeUI(); refreshSendBtn();
+          $('cap-text').focus();
+        } else {
+          switchPage('ask');
+          STATE.askTarget = n; askSearch.setChip(n);
+          $('ask-text').focus();
+        }
+      });
+    });
+    $('inspect').classList.add('open');
+  }
+  function closeInspect(){ $('inspect').classList.remove('open'); }
+  $('inspect-back').addEventListener('click', closeInspect);
+
+  // ============ FEED PAGE
+  function renderFeed(){
+    const list = $('feed-list');
+    if(!FEED.length){
+      list.innerHTML = '<div class="empty"><span class="ic">⟳</span>No feed entries yet.</div>';
+      return;
+    }
+    list.innerHTML = FEED.slice(0, 80).map(f => {
+      const ts = new Date(f.ts);
+      const now = new Date();
+      const dlt = (now - ts) / 1000;
+      const rel = dlt < 60 ? 'just now' : dlt < 3600 ? Math.floor(dlt/60)+'m ago' : dlt < 86400 ? Math.floor(dlt/3600)+'h ago' : Math.floor(dlt/86400)+'d ago';
+      return `<div class="feed-item">
+        <div class="feed-head">
+          <span class="feed-actor ${f.actor==='kam'?'kam':'claude'}">${escapeHtml(f.actor||'?')}</span>
+          <span class="feed-op">${escapeHtml(f.op||'')}</span>
+          <span class="feed-ts">${rel}</span>
+        </div>
+        <div class="feed-note">${escapeHtml(f.note||'')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // ============ QUESTIONS PAGE
+  function renderQuestions(){
+    const list = $('questions-list');
+    if(!QUESTIONS.length){
+      list.innerHTML = '<div class="empty"><span class="ic">!</span>No open questions. Claude will queue them here when uncertain.</div>';
+      return;
+    }
+    const order = { open:0, answered:1, dismissed:2 };
+    const pri = { high:0, med:1, low:2 };
+    const sorted = QUESTIONS.slice().sort((a,b) => {
+      const so = (order[a.status]||9) - (order[b.status]||9);
+      return so || (pri[a.priority]||9) - (pri[b.priority]||9);
+    });
+    list.innerHTML = sorted.map(q => {
+      if(q.status !== 'open'){
+        return `<div class="q-item answered">
+          <div class="q-head">
+            <span class="pri ${q.priority||'med'}">${escapeHtml((q.priority||'med').toUpperCase())}</span>
+            ${q.nodeLabel ? `<span class="node">${escapeHtml(q.nodeLabel)}</span>` : '<span class="node" style="color:var(--text-faint)">general</span>'}
+            <span class="ts">${escapeHtml(new Date(q.ts).toLocaleDateString())}</span>
+          </div>
+          <div class="q-text">${escapeHtml(q.question)}</div>
+          ${q.answer ? `<div class="q-answered-line">↳ ${escapeHtml(q.answer)}</div>` : '<div class="q-ctx">Dismissed.</div>'}
+        </div>`;
+      }
+      return `<div class="q-item" data-qid="${escapeHtml(q.id)}">
+        <div class="q-head">
+          <span class="pri ${q.priority||'med'}">${escapeHtml((q.priority||'med').toUpperCase())}</span>
+          ${q.nodeLabel ? `<span class="node">${escapeHtml(q.nodeLabel)}</span>` : '<span class="node" style="color:var(--text-faint)">general</span>'}
+          <span class="ts">${escapeHtml(new Date(q.ts).toLocaleDateString())}</span>
+        </div>
+        <div class="q-text">${escapeHtml(q.question)}</div>
+        ${q.context ? `<div class="q-ctx">${escapeHtml(q.context)}</div>` : ''}
+        <textarea id="qa-${escapeHtml(q.id)}" placeholder="Your answer (tap iPhone keyboard mic for voice)…" autocapitalize="sentences"></textarea>
+        <div class="q-actions">
+          <button class="btn answer" data-qid="${escapeHtml(q.id)}">Send answer</button>
+          <button class="btn ghost" data-dismiss="${escapeHtml(q.id)}">Dismiss</button>
+          ${q.nodeId ? `<button class="btn ghost" data-jump="${escapeHtml(q.nodeId)}">Open node</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('[data-qid]').forEach(b => {
+      if(b.tagName === 'BUTTON'){
+        b.addEventListener('click', () => answerQuestionMobile(b.dataset.qid));
+      }
+    });
+    list.querySelectorAll('[data-dismiss]').forEach(b => {
+      b.addEventListener('click', () => dismissQuestionMobile(b.dataset.dismiss));
+    });
+    list.querySelectorAll('[data-jump]').forEach(b => {
+      b.addEventListener('click', () => openInspect(b.dataset.jump));
+    });
+  }
+
+  function answerQuestionMobile(qid){
+    const q = QUESTIONS.find(x => x.id === qid);
+    if(!q) return;
+    const ta = $('qa-' + qid);
+    const ans = (ta.value || '').trim();
+    if(!ans){ toast('Type or dictate an answer first'); return; }
+    q.status = 'answered'; q.answer = ans; q.answeredAt = new Date().toISOString();
+    const payload = {
+      generatedAt: q.answeredAt,
+      source: 'brain-mobile.html',
+      actions: [{
+        type: 'answer-question',
+        questionId: qid,
+        nodeId: q.nodeId || null,
+        nodeLabel: q.nodeLabel || null,
+        question: q.question,
+        answer: ans
+      }]
+    };
+    const block = 'SYNC BRAIN ACTIONS:\n```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+    copyAndOpen(block);
+    renderQuestions();
+    renderQBadge();
+  }
+  function dismissQuestionMobile(qid){
+    const q = QUESTIONS.find(x => x.id === qid);
+    if(!q) return;
+    q.status = 'dismissed';
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      source: 'brain-mobile.html',
+      actions: [{ type:'dismiss-question', questionId: qid, question: q.question }]
+    };
+    const block = 'SYNC BRAIN ACTIONS:\n```json\n' + JSON.stringify(payload, null, 2) + '\n```';
+    copyAndOpen(block);
+    renderQuestions();
+    renderQBadge();
+  }
+
+  // ============ INIT
+  updateModeUI();
+  renderQBadge();
+})();
+</script>
+</body>
+</html>

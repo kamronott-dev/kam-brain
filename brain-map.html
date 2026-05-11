@@ -1,0 +1,1593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Brain Map — Kam</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#181818;
+    --bg-soft:#202020;
+    --panel:#232323;
+    --panel-border:#2f2f2f;
+    --text:#e7e7e7;
+    --text-dim:#a0a0a0;
+    --text-faint:#6b6b6b;
+    --node:#b8b8b8;
+    --node-strong:#d6d6d6;
+    --node-dim:#5a5a5a;
+    --accent:#bef264;
+    --accent-soft:#a3e635;
+    --edge:rgba(190,190,190,0.10);
+    --edge-active:rgba(190,242,100,0.55);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  body{position:relative}
+
+  /* CANVAS */
+  #graph{position:absolute;inset:0;display:block;cursor:grab}
+  #graph:active{cursor:grabbing}
+
+  /* TOP-LEFT TITLE */
+  .titlebar{
+    position:absolute;top:18px;left:22px;z-index:10;
+    display:flex;align-items:center;gap:12px;
+    pointer-events:none;
+  }
+  .titlebar .dot{
+    width:9px;height:9px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 12px rgba(190,242,100,0.6);
+  }
+  .titlebar h1{
+    margin:0;font-size:13px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);
+  }
+  .titlebar .stat{
+    margin-left:14px;font-size:11px;color:var(--text-faint);font-variant-numeric:tabular-nums;
+  }
+
+  /* SEARCH + FILTERS - TOP */
+  .controls{
+    position:absolute;top:55px;left:22px;z-index:10;
+    display:flex;flex-direction:column;gap:10px;
+    width:300px;
+  }
+  .search-wrap{position:relative}
+  .search{
+    width:100%;background:var(--panel);border:1px solid var(--panel-border);
+    border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;
+    padding:9px 32px 9px 12px;outline:none;transition:border .15s;
+  }
+  .search:focus{border-color:var(--accent)}
+  .search::placeholder{color:var(--text-faint)}
+  .search-x{
+    position:absolute;right:8px;top:50%;transform:translateY(-50%);
+    background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:14px;
+    width:22px;height:22px;border-radius:4px;display:none;
+  }
+  .search-x:hover{color:var(--text);background:rgba(255,255,255,0.06)}
+  .search-x.visible{display:block}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    background:var(--panel);border:1px solid var(--panel-border);color:var(--text-dim);
+    padding:5px 10px;border-radius:14px;font-size:11.5px;cursor:pointer;
+    transition:all .15s;font-family:inherit;
+    display:flex;align-items:center;gap:5px;
+  }
+  .chip:hover{border-color:#444;color:var(--text)}
+  .chip.active{background:rgba(190,242,100,0.10);border-color:var(--accent);color:var(--accent)}
+  .chip .count{color:var(--text-faint);font-variant-numeric:tabular-nums;font-size:10.5px}
+  .chip.active .count{color:var(--accent-soft)}
+
+  /* LEGEND - BOTTOM LEFT */
+  .legend{
+    position:absolute;bottom:18px;left:22px;z-index:10;
+    background:rgba(24,24,24,0.85);backdrop-filter:blur(8px);
+    border:1px solid var(--panel-border);border-radius:10px;
+    padding:10px 14px;font-size:11px;color:var(--text-dim);
+    display:flex;flex-direction:column;gap:7px;max-width:230px;
+  }
+  .legend-row{display:flex;align-items:center;gap:8px}
+  .legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+  .legend-dot.gray{background:var(--node)}
+  .legend-dot.green{background:var(--accent);box-shadow:0 0 8px rgba(190,242,100,0.4)}
+  .legend-dot.small{width:6px;height:6px}
+  .legend-line{height:1px;flex:1;background:var(--edge);min-width:24px}
+  .legend hr{margin:4px 0;border:none;border-top:1px solid var(--panel-border)}
+  .legend .kbd{
+    display:inline-block;font-family:'Inter',sans-serif;font-size:10px;
+    background:#2a2a2a;border:1px solid #3a3a3a;border-radius:3px;padding:0 5px;color:var(--text-dim);
+  }
+
+  /* RECENT UPDATES PANEL - BOTTOM RIGHT */
+  .feed-toggle{
+    position:absolute;bottom:18px;right:22px;z-index:10;
+    background:var(--panel);border:1px solid var(--panel-border);color:var(--text);
+    padding:9px 14px;border-radius:8px;font-family:inherit;font-size:12px;cursor:pointer;
+    display:flex;align-items:center;gap:8px;transition:all .15s;
+  }
+  .feed-toggle:hover{border-color:var(--accent);color:var(--accent)}
+  .feed-toggle .pulse{
+    width:7px;height:7px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 8px rgba(190,242,100,0.7);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.25)}}
+
+  .feed-panel{
+    position:absolute;bottom:62px;right:22px;z-index:11;
+    width:380px;max-height:60vh;
+    background:rgba(28,28,28,0.96);backdrop-filter:blur(12px);
+    border:1px solid var(--panel-border);border-radius:10px;
+    display:none;flex-direction:column;overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,0.5);
+  }
+  .feed-panel.open{display:flex}
+  .feed-head{
+    padding:12px 16px;border-bottom:1px solid var(--panel-border);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .feed-head h3{margin:0;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);font-weight:600}
+  .feed-list{flex:1;overflow-y:auto;padding:6px 0}
+  .feed-item{
+    padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04);
+    cursor:pointer;transition:background .12s;
+  }
+  .feed-item:hover{background:rgba(255,255,255,0.03)}
+  .feed-item:last-child{border-bottom:none}
+  .feed-item .ts{font-size:10.5px;color:var(--text-faint);font-variant-numeric:tabular-nums;letter-spacing:0.04em}
+  .feed-item .actor{
+    display:inline-block;font-size:9.5px;letter-spacing:0.10em;text-transform:uppercase;
+    padding:1px 5px;border-radius:3px;margin-left:6px;
+  }
+  .feed-item .actor.claude{background:rgba(190,242,100,0.10);color:var(--accent)}
+  .feed-item .actor.kam{background:rgba(120,160,240,0.10);color:#a4c4ff}
+  .feed-item .op{font-size:10.5px;color:var(--text-faint);margin-left:6px;text-transform:uppercase;letter-spacing:0.08em}
+  .feed-item .note{font-size:12.5px;color:var(--text);margin-top:4px;line-height:1.45}
+
+  /* SIDE PANEL (DETAILS) - RIGHT */
+  .detail-panel{
+    position:absolute;top:0;right:0;height:100%;width:420px;z-index:12;
+    background:rgba(28,28,28,0.97);backdrop-filter:blur(14px);
+    border-left:1px solid var(--panel-border);
+    display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .26s cubic-bezier(.2,.7,.2,1);
+    box-shadow:-20px 0 60px rgba(0,0,0,0.4);
+  }
+  .detail-panel.open{transform:translateX(0)}
+  .detail-head{
+    padding:18px 22px;border-bottom:1px solid var(--panel-border);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  }
+  .detail-title{font-size:18px;font-weight:600;color:var(--text);margin:0;line-height:1.3}
+  .detail-meta{font-size:11px;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;margin-top:5px}
+  .detail-close{
+    background:none;border:none;color:var(--text-faint);cursor:pointer;
+    font-size:18px;width:28px;height:28px;border-radius:6px;flex-shrink:0;
+  }
+  .detail-close:hover{background:rgba(255,255,255,0.06);color:var(--text)}
+  .detail-body{flex:1;overflow-y:auto;padding:18px 22px}
+  .detail-summary{
+    color:var(--text-dim);font-size:13.5px;line-height:1.6;margin-bottom:18px;
+    padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,0.04);
+  }
+  .detail-section{margin-bottom:20px}
+  .detail-section h4{
+    margin:0 0 8px;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--text-faint);font-weight:600;
+  }
+  .detail-links{display:flex;flex-direction:column;gap:2px}
+  .detail-link{
+    display:flex;align-items:center;gap:8px;padding:0;
+    border-radius:6px;font-size:12.5px;color:var(--text-dim);
+    transition:background .12s;background:transparent;
+  }
+  .detail-link:hover{background:rgba(255,255,255,0.04)}
+  .detail-link:hover .detail-link-actions{opacity:1}
+  .detail-link-main{
+    flex:1;display:flex;align-items:center;gap:8px;padding:7px 10px;
+    cursor:pointer;background:none;border:none;color:inherit;font:inherit;
+    text-align:left;border-radius:6px;min-width:0;
+  }
+  .detail-link-main:hover{color:var(--text)}
+  .detail-link-main span.label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .detail-link .ltype{font-size:9.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;margin-left:auto;flex-shrink:0}
+  .detail-link .ldot{width:6px;height:6px;border-radius:50%;background:var(--node);flex-shrink:0}
+  .detail-link .ldot.green{background:var(--accent)}
+  .detail-link-actions{
+    display:flex;align-items:center;gap:2px;padding-right:6px;
+    opacity:0.35;transition:opacity .12s;
+  }
+  .icon-btn{
+    background:none;border:none;color:var(--text-faint);cursor:pointer;
+    width:24px;height:24px;border-radius:5px;font-size:13px;
+    display:flex;align-items:center;justify-content:center;
+    transition:all .12s;font-family:inherit;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,0.08);color:var(--text)}
+  .icon-btn.danger:hover{background:rgba(255,90,90,0.15);color:#ff8a8a}
+  .icon-btn.info:hover{color:var(--accent)}
+
+  /* EDGE INSPECTOR (replaces detail-body when active) */
+  .edge-inspector{display:flex;flex-direction:column;gap:14px}
+  .edge-back{
+    background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:12px;
+    padding:4px 0;text-align:left;font-family:inherit;
+    display:flex;align-items:center;gap:6px;margin-bottom:4px;
+  }
+  .edge-back:hover{color:var(--text)}
+  .edge-card{
+    background:rgba(255,255,255,0.02);border:1px solid var(--panel-border);
+    border-radius:8px;padding:12px 14px;
+  }
+  .edge-card .ec-meta{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);margin-bottom:4px}
+  .edge-card .ec-name{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .edge-card .ec-name .ldot{width:8px;height:8px;border-radius:50%;background:var(--node)}
+  .edge-card .ec-name .ldot.green{background:var(--accent)}
+  .edge-card .ec-body{font-size:12.5px;color:var(--text-dim);line-height:1.55}
+  .edge-link-bar{
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    padding:8px 0;color:var(--text-faint);font-size:11px;
+  }
+  .edge-link-bar .arrow{
+    flex:1;height:1px;background:linear-gradient(to right,transparent,rgba(190,242,100,0.4),transparent);
+  }
+  .edge-link-bar .badge{
+    background:rgba(190,242,100,0.10);border:1px solid rgba(190,242,100,0.3);
+    color:var(--accent);padding:3px 10px;border-radius:12px;
+    font-size:10.5px;letter-spacing:0.10em;text-transform:uppercase;font-weight:500;
+  }
+  .edge-annot-block{
+    background:rgba(190,242,100,0.05);border:1px solid rgba(190,242,100,0.18);
+    border-radius:8px;padding:12px 14px;
+  }
+  .edge-annot-block h4{margin:0 0 8px;color:var(--accent);font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .edge-annot-block textarea{
+    width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--panel-border);
+    border-radius:6px;color:var(--text);font-family:inherit;font-size:12.5px;
+    padding:8px 10px;resize:vertical;min-height:64px;outline:none;
+  }
+  .edge-annot-block textarea:focus{border-color:var(--accent)}
+  .edge-annot-existing{
+    font-size:12.5px;color:var(--text-dim);line-height:1.55;
+    padding:8px 10px;background:rgba(0,0,0,0.25);border-radius:6px;margin-bottom:10px;
+    font-style:italic;
+  }
+  .edge-danger-block{
+    background:rgba(255,90,90,0.05);border:1px solid rgba(255,90,90,0.18);
+    border-radius:8px;padding:12px 14px;
+  }
+  .edge-danger-block h4{margin:0 0 8px;color:#ff8a8a;font-size:10.5px;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+  .edge-danger-block .desc{font-size:11.5px;color:var(--text-dim);line-height:1.45;margin-bottom:10px}
+  .edge-danger-block textarea{
+    width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--panel-border);
+    border-radius:6px;color:var(--text);font-family:inherit;font-size:12.5px;
+    padding:8px 10px;resize:vertical;min-height:50px;outline:none;
+  }
+  .edge-danger-block textarea:focus{border-color:#ff8a8a}
+  .btn.danger{background:#ff7a7a;color:#1a1a1a}
+  .btn.danger:hover{opacity:0.88}
+  .btn.danger.ghost{background:transparent;color:#ff8a8a;border:1px solid rgba(255,138,138,0.4)}
+  .btn.danger.ghost:hover{background:rgba(255,90,90,0.10);color:#ff8a8a}
+  .inline-confirm{
+    display:flex;gap:6px;align-items:center;padding:6px 10px;
+    background:rgba(255,90,90,0.08);border:1px solid rgba(255,90,90,0.25);
+    border-radius:6px;font-size:11.5px;color:#ff8a8a;
+  }
+
+  .detail-path{
+    font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:11.5px;
+    color:var(--text-faint);background:rgba(0,0,0,0.3);
+    padding:7px 9px;border-radius:5px;word-break:break-all;
+  }
+  .detail-edit{
+    margin:18px 22px 18px;padding:14px;background:rgba(190,242,100,0.05);
+    border:1px solid rgba(190,242,100,0.18);border-radius:8px;font-size:12px;color:var(--text-dim);
+  }
+  .detail-edit h4{margin:0 0 8px;color:var(--accent);font-size:11px;letter-spacing:0.12em;text-transform:uppercase}
+  .detail-edit textarea{
+    width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--panel-border);
+    border-radius:6px;color:var(--text);font-family:inherit;font-size:12.5px;
+    padding:8px 10px;resize:vertical;min-height:80px;outline:none;
+  }
+  .detail-edit textarea:focus{border-color:var(--accent)}
+  .detail-edit .row{display:flex;gap:8px;margin-top:8px;align-items:center}
+  .btn{
+    background:var(--accent);color:#1a1a1a;border:none;border-radius:6px;
+    padding:7px 14px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s;
+  }
+  .btn:hover{opacity:0.88}
+  .btn.ghost{background:transparent;color:var(--text-dim);border:1px solid var(--panel-border)}
+  .btn.ghost:hover{border-color:var(--text-dim);color:var(--text)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+
+  /* CONNECT BRAIN BANNER */
+  .connect-banner{
+    position:absolute;top:18px;right:22px;z-index:13;
+    background:rgba(190,242,100,0.08);border:1px solid rgba(190,242,100,0.25);
+    border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;
+    max-width:380px;
+  }
+  .connect-banner.hidden{display:none}
+  .connect-banner .msg{font-size:12px;color:var(--text);line-height:1.4}
+  .connect-banner .msg b{color:var(--accent)}
+
+  /* NODE LABELS */
+  .label-overlay{
+    position:absolute;inset:0;pointer-events:none;
+    font-size:11px;color:var(--text-faint);
+  }
+
+  /* TOAST */
+  .toast{
+    position:absolute;bottom:78px;left:50%;transform:translateX(-50%);z-index:50;
+    background:rgba(40,40,40,0.95);backdrop-filter:blur(8px);
+    border:1px solid var(--panel-border);border-radius:8px;
+    padding:9px 14px;font-size:12.5px;color:var(--text);
+    opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+  .toast.green{border-color:var(--accent);color:var(--accent)}
+
+  /* CLAUDE'S QUESTIONS PANEL ITEMS */
+  .q-item{
+    padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);
+  }
+  .q-item:last-child{border-bottom:none}
+  .q-item .q-head{
+    display:flex;align-items:center;gap:6px;margin-bottom:6px;
+    font-size:10px;letter-spacing:0.10em;text-transform:uppercase;
+  }
+  .q-item .q-head .pri{color:#7aa6ff;font-weight:600}
+  .q-item .q-head .pri.high{color:#ff8a8a}
+  .q-item .q-head .pri.low{color:var(--text-faint)}
+  .q-item .q-head .node{color:var(--accent);font-weight:600;text-transform:none;letter-spacing:0;font-size:11px}
+  .q-item .q-head .ts{margin-left:auto;color:var(--text-faint)}
+  .q-item .q-text{font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px}
+  .q-item .q-ctx{font-size:11.5px;color:var(--text-faint);font-style:italic;line-height:1.45;margin-bottom:8px}
+  .q-item textarea{
+    width:100%;background:rgba(0,0,0,0.32);border:1px solid var(--panel-border);
+    border-radius:6px;color:var(--text);font-family:inherit;font-size:12.5px;
+    padding:8px 10px;resize:vertical;min-height:60px;outline:none;
+  }
+  .q-item textarea:focus{border-color:#7aa6ff}
+  .q-item .q-actions{display:flex;gap:6px;margin-top:6px;align-items:center}
+  .q-item .q-actions .btn{padding:6px 12px;font-size:11.5px;min-height:0}
+  .q-item .q-actions .btn.answer{background:#7aa6ff;color:#0a0a14}
+  .q-item .q-result{font-size:11px;color:var(--text-faint);margin-left:auto}
+  .q-item.answered{opacity:0.5}
+  .q-item.answered .q-text{text-decoration:line-through}
+  .q-empty{padding:24px 18px;text-align:center;color:var(--text-faint);font-size:12.5px;font-style:italic}
+
+  /* NODE DEEP-DETAIL VIEW */
+  .deep-toggle-row{display:flex;justify-content:flex-end;margin:-4px 0 14px}
+  .deep-toggle-row .deep-link{
+    background:transparent;border:1px solid var(--panel-border);color:var(--text-dim);
+    font-family:inherit;font-size:11px;letter-spacing:0.06em;
+    padding:5px 10px;border-radius:5px;cursor:pointer;transition:.15s;
+  }
+  .deep-toggle-row .deep-link:hover{border-color:var(--accent);color:var(--accent)}
+  .node-deep{display:flex;flex-direction:column;gap:18px}
+  .node-deep .back-row{display:flex;align-items:center;gap:10px}
+  .node-deep h5{
+    font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;
+    color:var(--text-faint);margin:0 0 8px;font-weight:600;
+  }
+  .node-deep .meta-grid{
+    display:grid;grid-template-columns:88px 1fr;gap:5px 12px;
+    font-size:12px;padding:12px 14px;background:rgba(0,0,0,0.25);
+    border:1px solid var(--panel-border);border-radius:8px;
+  }
+  .node-deep .meta-grid .k{color:var(--text-faint);font-size:10.5px;letter-spacing:0.08em;text-transform:uppercase;padding-top:2px}
+  .node-deep .meta-grid .v{color:var(--text);font-family:ui-monospace,SF Mono,Menlo,monospace;font-size:11.5px;word-break:break-word}
+  .node-deep .deep-body{
+    font-size:13px;line-height:1.6;color:var(--text-dim);white-space:pre-wrap;
+    padding:10px 14px;background:rgba(0,0,0,0.18);border:1px solid var(--panel-border);
+    border-radius:8px;
+  }
+  .node-deep .grouped-edges{display:flex;flex-direction:column;gap:14px}
+  .node-deep .grouped-edges .grp{display:flex;flex-direction:column;gap:2px}
+  .node-deep .grouped-edges .grp .grp-title{
+    font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);
+    padding:6px 0 4px;border-bottom:1px solid rgba(190,242,100,0.18);margin-bottom:4px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .node-deep .grouped-edges .grp .grp-title .cnt{color:var(--text-faint);font-weight:400}
+  .node-deep .grouped-edges .annot-line{
+    font-size:11.5px;color:var(--text-faint);font-style:italic;
+    padding:2px 14px 8px 22px;line-height:1.45;
+  }
+  .node-deep .twohop{display:flex;flex-direction:column;gap:2px}
+  .node-deep .twohop .row{
+    display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;
+    font-size:12px;color:var(--text-dim);cursor:pointer;transition:background .12s;
+  }
+  .node-deep .twohop .row:hover{background:rgba(255,255,255,0.04);color:var(--text)}
+  .node-deep .twohop .row .via{color:var(--text-faint);font-size:10.5px;margin-left:auto}
+  .node-deep .twohop .row .ldot{width:6px;height:6px;border-radius:50%;background:var(--node);flex-shrink:0}
+  .node-deep .twohop .row .ldot.green{background:var(--accent)}
+  .node-deep .empty-note{font-size:12px;color:var(--text-faint);font-style:italic;padding:6px 0}
+
+  /* RESPONSIVE */
+  @media(max-width:780px){
+    .controls{width:calc(100vw - 44px)}
+    .detail-panel{width:100%}
+    .feed-panel{width:calc(100vw - 44px);right:22px;max-height:50vh}
+    .legend{display:none}
+  }
+</style>
+</head>
+<body>
+
+  <canvas id="graph"></canvas>
+
+  <div class="titlebar">
+    <div class="dot"></div>
+    <h1>Brain · Kam</h1>
+    <div class="stat" id="stat-nodes">— nodes · — edges</div>
+  </div>
+
+  <div class="controls">
+    <div class="search-wrap">
+      <input id="search" class="search" type="text" placeholder="Search nodes…  ( press / to focus )" autocomplete="off" />
+      <button class="search-x" id="search-x" title="Clear">✕</button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="connect-banner hidden" id="connect-banner">
+    <div class="msg">
+      <b>Connect Brain folder</b> for zero-action edits (.md writes from this app, one-time picker).
+    </div>
+    <button class="btn" id="connect-btn">Connect</button>
+    <button class="btn ghost" id="connect-skip" style="padding:5px 8px">Later</button>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row"><div class="legend-dot gray"></div> Brain node</div>
+    <div class="legend-row"><div class="legend-dot green"></div> Recently updated · important</div>
+    <div class="legend-row"><div class="legend-dot gray small"></div> Smaller entity / leaf</div>
+    <div class="legend-row" style="margin-top:2px"><div class="legend-line"></div> &nbsp;Cross-reference</div>
+    <hr/>
+    <div class="legend-row"><span class="kbd">/</span> search · <span class="kbd">esc</span> close</div>
+    <div class="legend-row"><span class="kbd">scroll</span> zoom · <span class="kbd">drag</span> pan</div>
+  </div>
+
+  <button class="feed-toggle" id="feed-toggle"><span class="pulse"></span>Recent updates</button>
+  <button class="feed-toggle" id="questions-toggle" style="right:200px"><span class="pulse" style="background:#7aa6ff;box-shadow:0 0 8px rgba(122,166,255,0.7)"></span>Claude's questions <span id="q-count" style="color:var(--text-faint);font-size:11px;margin-left:4px"></span></button>
+
+  <div class="feed-panel" id="feed-panel">
+    <div class="feed-head">
+      <h3>Recent updates</h3>
+      <button class="detail-close" id="feed-close">✕</button>
+    </div>
+    <div class="feed-list" id="feed-list"></div>
+  </div>
+
+  <div class="feed-panel" id="questions-panel" style="right:200px">
+    <div class="feed-head">
+      <h3>Claude's questions for you</h3>
+      <button class="detail-close" id="questions-close">✕</button>
+    </div>
+    <div class="feed-list" id="questions-list"></div>
+  </div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-head">
+      <div>
+        <h2 class="detail-title" id="detail-title">—</h2>
+        <div class="detail-meta" id="detail-meta">—</div>
+      </div>
+      <button class="detail-close" id="detail-close">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script src="index.js"></script>
+<script src="feed.js"></script>
+<script src="questions.js" onerror="window.BRAIN_QUESTIONS = window.BRAIN_QUESTIONS || []"></script>
+<script>
+  /* ============================================================
+     BRAIN MAP - force-directed graph renderer
+     ============================================================ */
+
+  const STATE = {
+    INDEX: window.BRAIN_INDEX || {nodes:[],edges:[],categories:[]},
+    FEED:  window.BRAIN_FEED  || [],
+    QUESTIONS: window.BRAIN_QUESTIONS || [],
+    selectedId: null,
+    activeCategories: new Set(), // empty = all
+    search: "",
+    transform: { x: 0, y: 0, k: 1 },
+    dirHandle: null, // FileSystemDirectoryHandle once granted
+    hovered: null
+  };
+
+  // ============ DOM refs
+  const canvas = document.getElementById('graph');
+  const ctx = canvas.getContext('2d');
+  const statNodes = document.getElementById('stat-nodes');
+  const chipsEl = document.getElementById('chips');
+  const searchEl = document.getElementById('search');
+  const searchX = document.getElementById('search-x');
+  const feedToggle = document.getElementById('feed-toggle');
+  const feedPanel = document.getElementById('feed-panel');
+  const feedClose = document.getElementById('feed-close');
+  const feedList = document.getElementById('feed-list');
+  const detailPanel = document.getElementById('detail-panel');
+  const detailTitle = document.getElementById('detail-title');
+  const detailMeta = document.getElementById('detail-meta');
+  const detailBody = document.getElementById('detail-body');
+  const detailClose = document.getElementById('detail-close');
+  const connectBanner = document.getElementById('connect-banner');
+  const connectBtn = document.getElementById('connect-btn');
+  const connectSkip = document.getElementById('connect-skip');
+  const toastEl = document.getElementById('toast');
+
+  // ============ Canvas sizing (handle DPR)
+  let W = 0, H = 0, DPR = window.devicePixelRatio || 1;
+  function resize(){
+    DPR = window.devicePixelRatio || 1;
+    W = canvas.clientWidth = window.innerWidth;
+    H = canvas.clientHeight = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', () => { resize(); restart(); });
+  resize();
+
+  // ============ Build graph (deep clone nodes so d3 can mutate)
+  function buildGraph(){
+    const nodes = STATE.INDEX.nodes.map(n => ({...n}));
+    const idMap = new Map(nodes.map(n => [n.id, n]));
+    const edges = STATE.INDEX.edges
+      .map(e => ({
+        source: idMap.get(e.source),
+        target: idMap.get(e.target),
+        type: e.type,
+        _src: e.source, _tgt: e.target
+      }))
+      .filter(e => e.source && e.target);
+    return { nodes, edges, idMap };
+  }
+  let GRAPH = buildGraph();
+
+  // ============ d3 force simulation
+  let sim;
+  function restart(){
+    if(sim) sim.stop();
+    GRAPH = buildGraph();
+    // pre-position by category cluster center to encourage cluster separation
+    const cats = STATE.INDEX.categories;
+    const centers = {};
+    cats.forEach((c,i) => {
+      const angle = (i / cats.length) * Math.PI * 2 - Math.PI/2;
+      const r = Math.min(W,H) * 0.22;
+      centers[c.id] = { x: W/2 + Math.cos(angle)*r, y: H/2 + Math.sin(angle)*r };
+    });
+    GRAPH.nodes.forEach(n => {
+      const c = centers[n.category] || {x:W/2,y:H/2};
+      if(n.x == null) n.x = c.x + (Math.random()-0.5)*80;
+      if(n.y == null) n.y = c.y + (Math.random()-0.5)*80;
+    });
+
+    sim = d3.forceSimulation(GRAPH.nodes)
+      .force('link', d3.forceLink(GRAPH.edges).id(d => d.id).distance(d => {
+        // shorter for "contains", longer for "ref"
+        if(d.type === 'contains') return 35;
+        if(d.type === 'mentions') return 65;
+        if(d.type === 'ref')      return 110;
+        if(d.type === 'reports-to') return 70;
+        return 75;
+      }).strength(d => d.type === 'contains' ? 0.9 : 0.35))
+      .force('charge', d3.forceManyBody().strength(d => -90 - (d.weight||4)*6))
+      .force('center', d3.forceCenter(W/2, H/2).strength(0.04))
+      .force('collide', d3.forceCollide(d => nodeRadius(d) + 5).iterations(2))
+      .force('cluster', clusterForce(centers, 0.025))
+      .alpha(1).alphaDecay(0.025)
+      .on('tick', draw);
+  }
+
+  // Custom cluster-center force per category
+  function clusterForce(centers, strength){
+    return function(alpha){
+      const k = strength * alpha;
+      GRAPH.nodes.forEach(n => {
+        const c = centers[n.category];
+        if(!c) return;
+        n.vx -= (n.x - c.x) * k;
+        n.vy -= (n.y - c.y) * k;
+      });
+    };
+  }
+
+  // ============ Node radius mapping
+  function nodeRadius(n){
+    const base = 3.5 + (n.weight||4) * 0.7;
+    if(n.id === STATE.selectedId) return base + 3;
+    return base;
+  }
+
+  // ============ Hit testing (in world space)
+  function nodeAt(wx, wy){
+    let best = null, bestDist = Infinity;
+    for(const n of GRAPH.nodes){
+      const dx = n.x - wx, dy = n.y - wy;
+      const r = nodeRadius(n) + 4;
+      const d2 = dx*dx + dy*dy;
+      if(d2 <= r*r && d2 < bestDist){ best = n; bestDist = d2; }
+    }
+    return best;
+  }
+
+  // ============ Visibility (search + category filters)
+  function isVisible(n){
+    if(STATE.activeCategories.size > 0 && !STATE.activeCategories.has(n.category)) return false;
+    if(!STATE.search) return true;
+    const q = STATE.search.toLowerCase();
+    return (n.label||'').toLowerCase().includes(q)
+        || (n.summary||'').toLowerCase().includes(q)
+        || (n.body||'').toLowerCase().includes(q)
+        || (n.kind||'').toLowerCase().includes(q);
+  }
+  function isDimmed(n){
+    // If search active and node not matching, dim it (still draw faintly).
+    if(STATE.search){
+      const q = STATE.search.toLowerCase();
+      const hit = (n.label||'').toLowerCase().includes(q)
+               || (n.summary||'').toLowerCase().includes(q)
+               || (n.body||'').toLowerCase().includes(q);
+      if(!hit) return true;
+    }
+    if(STATE.activeCategories.size > 0 && !STATE.activeCategories.has(n.category)) return true;
+    return false;
+  }
+
+  // ============ Draw
+  function draw(){
+    ctx.save();
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.clearRect(0,0,W,H);
+
+    // apply pan/zoom
+    ctx.translate(STATE.transform.x, STATE.transform.y);
+    ctx.scale(STATE.transform.k, STATE.transform.k);
+
+    // EDGES first (under nodes)
+    ctx.lineWidth = 0.7 / STATE.transform.k;
+    for(const e of GRAPH.edges){
+      const sDim = isDimmed(e.source), tDim = isDimmed(e.target);
+      const active = STATE.selectedId && (e.source.id === STATE.selectedId || e.target.id === STATE.selectedId);
+      const hovered = STATE.hovered && (e.source.id === STATE.hovered.id || e.target.id === STATE.hovered.id);
+      if(active || hovered){
+        ctx.strokeStyle = 'rgba(190,242,100,0.45)';
+        ctx.lineWidth = 1.2 / STATE.transform.k;
+      } else if(sDim && tDim){
+        ctx.strokeStyle = 'rgba(140,140,140,0.04)';
+        ctx.lineWidth = 0.5 / STATE.transform.k;
+      } else {
+        ctx.strokeStyle = 'rgba(190,190,190,0.10)';
+        ctx.lineWidth = 0.7 / STATE.transform.k;
+      }
+      ctx.beginPath();
+      ctx.moveTo(e.source.x, e.source.y);
+      ctx.lineTo(e.target.x, e.target.y);
+      ctx.stroke();
+    }
+
+    // NODES
+    for(const n of GRAPH.nodes){
+      const r = nodeRadius(n);
+      const dim = isDimmed(n);
+      const selected = n.id === STATE.selectedId;
+      const hovered = STATE.hovered && STATE.hovered.id === n.id;
+      const green = n.highlight === true;
+
+      // glow for green nodes
+      if(green && !dim){
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 3, 0, Math.PI*2);
+        const g = ctx.createRadialGradient(n.x, n.y, r*0.4, n.x, n.y, r+3);
+        g.addColorStop(0, 'rgba(190,242,100,0.30)');
+        g.addColorStop(1, 'rgba(190,242,100,0)');
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r, 0, Math.PI*2);
+      if(green){
+        ctx.fillStyle = dim ? 'rgba(190,242,100,0.22)' : (selected ? '#d4ff7a' : '#bef264');
+      } else {
+        ctx.fillStyle = dim ? 'rgba(184,184,184,0.18)' : (selected ? '#e8e8e8' : (hovered ? '#d6d6d6' : '#b8b8b8'));
+      }
+      ctx.fill();
+
+      // ring on selected
+      if(selected){
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 4, 0, Math.PI*2);
+        ctx.strokeStyle = green ? 'rgba(190,242,100,0.7)' : 'rgba(232,232,232,0.6)';
+        ctx.lineWidth = 1.5 / STATE.transform.k;
+        ctx.stroke();
+      }
+
+      // labels - only show on larger or selected/hovered nodes
+      const showLabel = selected || hovered || (n.weight||0) >= 7 || (STATE.transform.k > 1.3 && (n.weight||0) >= 5);
+      if(showLabel && !dim){
+        ctx.font = `${selected||hovered ? 600 : 400} ${11 / STATE.transform.k}px Inter, sans-serif`;
+        ctx.fillStyle = green ? 'rgba(190,242,100,0.85)' : (selected||hovered ? '#e7e7e7' : '#9a9a9a');
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(n.label, n.x + r + 4/STATE.transform.k, n.y);
+      }
+    }
+    ctx.restore();
+  }
+
+  // ============ Interaction: pan, zoom, click, drag, hover
+  let dragging = null, dragStart = null, panning = null;
+  function screenToWorld(sx, sy){
+    return {
+      x: (sx - STATE.transform.x) / STATE.transform.k,
+      y: (sy - STATE.transform.y) / STATE.transform.k
+    };
+  }
+  canvas.addEventListener('mousedown', (e) => {
+    const {x,y} = screenToWorld(e.clientX, e.clientY);
+    const n = nodeAt(x,y);
+    if(n){
+      dragging = n;
+      n.fx = n.x; n.fy = n.y;
+      sim.alphaTarget(0.3).restart();
+    } else {
+      panning = { x: e.clientX, y: e.clientY, tx: STATE.transform.x, ty: STATE.transform.y };
+    }
+  });
+  window.addEventListener('mousemove', (e) => {
+    if(dragging){
+      const {x,y} = screenToWorld(e.clientX, e.clientY);
+      dragging.fx = x; dragging.fy = y;
+    } else if(panning){
+      STATE.transform.x = panning.tx + (e.clientX - panning.x);
+      STATE.transform.y = panning.ty + (e.clientY - panning.y);
+      draw();
+    } else {
+      const {x,y} = screenToWorld(e.clientX, e.clientY);
+      const n = nodeAt(x,y);
+      if(n !== STATE.hovered){
+        STATE.hovered = n;
+        canvas.style.cursor = n ? 'pointer' : 'grab';
+        draw();
+      }
+    }
+  });
+  window.addEventListener('mouseup', (e) => {
+    if(dragging){
+      // if barely moved, treat as click
+      const moved = Math.hypot((dragging.fx - dragging.x), (dragging.fy - dragging.y));
+      if(moved < 4) openDetail(dragging.id);
+      dragging.fx = null; dragging.fy = null;
+      sim.alphaTarget(0);
+      dragging = null;
+    }
+    panning = null;
+  });
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    const before = screenToWorld(sx, sy);
+    const factor = Math.pow(1.0015, -e.deltaY);
+    STATE.transform.k = Math.max(0.3, Math.min(4, STATE.transform.k * factor));
+    const after = screenToWorld(sx, sy);
+    STATE.transform.x += (after.x - before.x) * STATE.transform.k;
+    STATE.transform.y += (after.y - before.y) * STATE.transform.k;
+    draw();
+  }, { passive: false });
+
+  // ============ CHIPS (category filters)
+  function renderChips(){
+    chipsEl.innerHTML = '';
+    const counts = {};
+    STATE.INDEX.nodes.forEach(n => counts[n.category] = (counts[n.category]||0) + 1);
+    STATE.INDEX.categories.forEach(cat => {
+      const b = document.createElement('button');
+      b.className = 'chip' + (STATE.activeCategories.has(cat.id) ? ' active' : '');
+      b.innerHTML = `${cat.name} <span class="count">${counts[cat.id]||0}</span>`;
+      b.onclick = () => {
+        if(STATE.activeCategories.has(cat.id)) STATE.activeCategories.delete(cat.id);
+        else STATE.activeCategories.add(cat.id);
+        renderChips(); draw();
+      };
+      chipsEl.appendChild(b);
+    });
+  }
+  renderChips();
+
+  // ============ SEARCH
+  searchEl.addEventListener('input', (e) => {
+    STATE.search = e.target.value.trim();
+    searchX.classList.toggle('visible', !!STATE.search);
+    draw();
+  });
+  searchX.addEventListener('click', () => {
+    searchEl.value = '';
+    STATE.search = '';
+    searchX.classList.remove('visible');
+    draw();
+    searchEl.focus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === '/' && document.activeElement !== searchEl){
+      e.preventDefault();
+      searchEl.focus();
+    }
+    if(e.key === 'Escape'){
+      if(detailPanel.classList.contains('open')) closeDetail();
+      else if(feedPanel.classList.contains('open')) feedPanel.classList.remove('open');
+      else if(STATE.search){ searchEl.value=''; STATE.search=''; searchX.classList.remove('visible'); draw(); }
+    }
+  });
+
+  // ============ FEED PANEL
+  function renderFeed(){
+    feedList.innerHTML = '';
+    STATE.FEED.slice(0,80).forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'feed-item';
+      const targetNode = STATE.INDEX.nodes.find(n => n.id === item.target);
+      row.innerHTML = `
+        <div>
+          <span class="ts">${fmtTs(item.ts)}</span>
+          <span class="actor ${item.actor}">${item.actor}</span>
+          <span class="op">${item.op}</span>
+        </div>
+        <div class="note">${escapeHtml(item.note)}${targetNode ? ` <span style="color:#bef264;font-size:11px"> → ${escapeHtml(targetNode.label)}</span>` : ''}</div>
+      `;
+      row.onclick = () => {
+        if(targetNode){ openDetail(targetNode.id); centerOnNode(targetNode); }
+      };
+      feedList.appendChild(row);
+    });
+  }
+  renderFeed();
+  feedToggle.addEventListener('click', () => feedPanel.classList.toggle('open'));
+  feedClose.addEventListener('click', () => feedPanel.classList.remove('open'));
+
+  // ============ QUESTIONS PANEL (Claude → Kam)
+  const questionsToggle = document.getElementById('questions-toggle');
+  const questionsPanel = document.getElementById('questions-panel');
+  const questionsClose = document.getElementById('questions-close');
+  const questionsList = document.getElementById('questions-list');
+  const qCount = document.getElementById('q-count');
+
+  function renderQuestions(){
+    const open = STATE.QUESTIONS.filter(q => q.status === 'open');
+    qCount.textContent = open.length ? `(${open.length})` : '';
+    questionsList.innerHTML = '';
+    if(STATE.QUESTIONS.length === 0){
+      questionsList.innerHTML = '<div class="q-empty">No open questions. (Claude will queue here when uncertain about anything in your brain.)</div>';
+      return;
+    }
+    // open first, answered after
+    const sorted = STATE.QUESTIONS.slice().sort((a,b) => {
+      const order = { open:0, answered:1, dismissed:2 };
+      const so = (order[a.status]||9) - (order[b.status]||9);
+      if(so) return so;
+      const pri = { high:0, med:1, low:2 };
+      return (pri[a.priority]||9) - (pri[b.priority]||9);
+    });
+    sorted.forEach(q => {
+      const row = document.createElement('div');
+      row.className = 'q-item' + (q.status === 'answered' ? ' answered' : '');
+      const tsRel = fmtTs(q.ts);
+      row.innerHTML = `
+        <div class="q-head">
+          <span class="pri ${q.priority||'med'}">${escapeHtml((q.priority||'med').toUpperCase())}</span>
+          ${q.nodeLabel ? `<span class="node">${escapeHtml(q.nodeLabel)}</span>` : '<span class="node" style="color:var(--text-faint)">general</span>'}
+          <span class="ts">${tsRel}</span>
+        </div>
+        <div class="q-text">${escapeHtml(q.question)}</div>
+        ${q.context ? `<div class="q-ctx">${escapeHtml(q.context)}</div>` : ''}
+        ${q.status === 'open' ? `
+          <textarea id="qa-${escapeHtml(q.id)}" placeholder="Your answer (voice OK)…"></textarea>
+          <div class="q-actions">
+            <button class="btn answer" data-qid="${escapeHtml(q.id)}">Answer</button>
+            <button class="btn ghost" data-dismiss="${escapeHtml(q.id)}">Dismiss</button>
+            ${q.nodeId ? `<button class="btn ghost" data-jump="${escapeHtml(q.nodeId)}">Open node</button>` : ''}
+            <span class="q-result" id="qr-${escapeHtml(q.id)}"></span>
+          </div>
+        ` : `
+          <div class="q-ctx" style="color:var(--accent);font-style:normal">Answered ${q.answeredAt ? fmtTs(q.answeredAt) : ''}: ${escapeHtml(q.answer||'')}</div>
+        `}
+      `;
+      questionsList.appendChild(row);
+    });
+    questionsList.querySelectorAll('button[data-qid]').forEach(b => {
+      b.addEventListener('click', () => answerQuestion(b.dataset.qid));
+    });
+    questionsList.querySelectorAll('button[data-dismiss]').forEach(b => {
+      b.addEventListener('click', () => dismissQuestion(b.dataset.dismiss));
+    });
+    questionsList.querySelectorAll('button[data-jump]').forEach(b => {
+      b.addEventListener('click', () => {
+        const n = STATE.INDEX.nodes.find(x => x.id === b.dataset.jump);
+        if(n){ openDetail(n.id); centerOnNode(n); questionsPanel.classList.remove('open'); }
+      });
+    });
+  }
+
+  async function answerQuestion(qid){
+    const q = STATE.QUESTIONS.find(x => x.id === qid);
+    if(!q) return;
+    const ta = document.getElementById('qa-' + qid);
+    const ans = (ta.value || '').trim();
+    if(!ans){
+      document.getElementById('qr-' + qid).textContent = 'Type or dictate an answer first.';
+      return;
+    }
+    // In-memory mutate
+    q.status = 'answered';
+    q.answer = ans;
+    q.answeredAt = new Date().toISOString();
+    // Persist as pending action
+    const ts = q.answeredAt;
+    const payload = {
+      kind: 'BRAIN_PENDING',
+      generatedAt: ts,
+      source: 'brain-map.html',
+      action: 'answer-question',
+      questionId: qid,
+      nodeId: q.nodeId || null,
+      nodeLabel: q.nodeLabel || null,
+      question: q.question,
+      answer: ans
+    };
+    const fname = `brain-pending-answer-${ts.replace(/[:.]/g,'-')}.json`;
+    const res = await writePending(fname, JSON.stringify(payload, null, 2));
+    STATE.FEED.unshift({ ts, actor:'kam', op:'answer', target: q.nodeId || qid, note: `Q: ${q.question} → A: ${ans}` });
+    renderFeed();
+    renderQuestions();
+    toast('Answer saved', true);
+  }
+
+  async function dismissQuestion(qid){
+    const q = STATE.QUESTIONS.find(x => x.id === qid);
+    if(!q) return;
+    q.status = 'dismissed';
+    const ts = new Date().toISOString();
+    const payload = {
+      kind: 'BRAIN_PENDING',
+      generatedAt: ts,
+      source: 'brain-map.html',
+      action: 'dismiss-question',
+      questionId: qid,
+      question: q.question
+    };
+    const fname = `brain-pending-dismiss-${ts.replace(/[:.]/g,'-')}.json`;
+    await writePending(fname, JSON.stringify(payload, null, 2));
+    STATE.FEED.unshift({ ts, actor:'kam', op:'dismiss', target: q.nodeId || qid, note: `Dismissed Q: ${q.question}` });
+    renderFeed();
+    renderQuestions();
+    toast('Dismissed', true);
+  }
+
+  renderQuestions();
+  questionsToggle.addEventListener('click', () => questionsPanel.classList.toggle('open'));
+  questionsClose.addEventListener('click', () => questionsPanel.classList.remove('open'));
+
+  // ============ DETAIL PANEL
+  function openDetail(id){
+    const n = STATE.INDEX.nodes.find(x => x.id === id);
+    if(!n) return;
+    STATE.selectedId = id;
+    detailTitle.textContent = n.label;
+    const typeLabel = (n.type || '').toUpperCase();
+    const kindLabel = n.kind ? ` · ${n.kind.toUpperCase()}` : '';
+    const cat = STATE.INDEX.categories.find(c => c.id === n.category);
+    detailMeta.textContent = `${typeLabel}${kindLabel}${cat ? ' · ' + cat.name : ''}`;
+
+    // Build body
+    let html = '<div class="deep-toggle-row"><button class="deep-link" id="open-deep" title="See full body, every field, connections grouped by type, and 2-hop neighbors">View detailed →</button></div>';
+    if(n.summary) html += `<div class="detail-summary">${escapeHtml(n.summary)}</div>`;
+    if(n.body)    html += `<div class="detail-summary" style="border-bottom:none;padding-bottom:0">${escapeHtml(n.body)}</div>`;
+    if(n.path)    html += `<div class="detail-section"><h4>Path</h4><div class="detail-path">${escapeHtml(n.path)}</div></div>`;
+
+    // Connections
+    const out = STATE.INDEX.edges.filter(e => e.source === id);
+    const inc = STATE.INDEX.edges.filter(e => e.target === id);
+    if(out.length){
+      html += `<div class="detail-section"><h4>Connects to (${out.length})</h4><div class="detail-links" id="out-links"></div></div>`;
+    }
+    if(inc.length){
+      html += `<div class="detail-section"><h4>Referenced by (${inc.length})</h4><div class="detail-links" id="inc-links"></div></div>`;
+    }
+
+    // Edit panel (always available)
+    html += `
+      <div class="detail-edit">
+        <h4>Add a fact / note</h4>
+        <textarea id="edit-text" placeholder="New context to attach to ${escapeHtml(n.label)}…"></textarea>
+        <div class="row">
+          <button class="btn" id="save-fact">Save to brain</button>
+          <button class="btn ghost" id="copy-fact">Copy as SYNC BRAIN action</button>
+        </div>
+        <div id="edit-result" style="margin-top:8px;font-size:11.5px;color:var(--text-faint)"></div>
+      </div>
+    `;
+
+    detailBody.innerHTML = html;
+
+    // Wire links - each row: click-label to navigate, hover reveals info+disconnect icons
+    function makeLinkRow(edge, direction){
+      // direction: 'out' (source==current, click target) or 'in' (target==current, click source)
+      const otherId = direction === 'out' ? edge.target : edge.source;
+      const other = STATE.INDEX.nodes.find(n => n.id === otherId);
+      if(!other) return null;
+      const row = document.createElement('div');
+      row.className = 'detail-link';
+      const annotIndicator = edge.annotation ? '<span title="has annotation" style="color:var(--accent);font-size:9px;margin-left:4px">●</span>' : '';
+      row.innerHTML = `
+        <button class="detail-link-main">
+          <span class="ldot ${other.highlight ? 'green':''}"></span>
+          <span class="label">${escapeHtml(other.label)}${annotIndicator}</span>
+          <span class="ltype">${edge.type}</span>
+        </button>
+        <div class="detail-link-actions">
+          <button class="icon-btn info" title="Inspect connection" aria-label="Inspect">ⓘ</button>
+          <button class="icon-btn danger" title="Disconnect" aria-label="Disconnect">✕</button>
+        </div>
+      `;
+      row.querySelector('.detail-link-main').onclick = () => { openDetail(otherId); centerOnNode(other); };
+      row.querySelector('.icon-btn.info').onclick = (e) => { e.stopPropagation(); openEdgeInspector(edge.source, edge.target, edge.type, id); };
+      row.querySelector('.icon-btn.danger').onclick = (e) => { e.stopPropagation(); quickDisconnect(row, edge.source, edge.target, edge.type, id); };
+      return row;
+    }
+    const outEl = document.getElementById('out-links');
+    if(outEl){ out.forEach(e => { const r = makeLinkRow(e,'out'); if(r) outEl.appendChild(r); }); }
+    const incEl = document.getElementById('inc-links');
+    if(incEl){ inc.forEach(e => { const r = makeLinkRow(e,'in'); if(r) incEl.appendChild(r); }); }
+    document.getElementById('save-fact').onclick = () => saveFact(id);
+    document.getElementById('copy-fact').onclick = () => copyFact(id);
+    const deepBtn = document.getElementById('open-deep');
+    if(deepBtn) deepBtn.onclick = () => openNodeDetailed(id);
+
+    detailPanel.classList.add('open');
+    draw();
+  }
+  function closeDetail(){
+    detailPanel.classList.remove('open');
+    STATE.selectedId = null;
+    draw();
+  }
+  detailClose.addEventListener('click', closeDetail);
+
+  // ============ NODE DEEP-DETAIL (click "View detailed" from summary)
+  function openNodeDetailed(id){
+    const n = STATE.INDEX.nodes.find(x => x.id === id);
+    if(!n) return;
+    STATE.selectedId = id;
+    detailTitle.textContent = n.label;
+    const typeLabel = (n.type || '').toUpperCase();
+    const kindLabel = n.kind ? ` · ${n.kind.toUpperCase()}` : '';
+    const cat = STATE.INDEX.categories.find(c => c.id === n.category);
+    detailMeta.textContent = `DEEP DETAIL · ${typeLabel}${kindLabel}${cat ? ' · ' + cat.name : ''}`;
+
+    // Gather edges grouped by type, in canonical order
+    const out = STATE.INDEX.edges.filter(e => e.source === id).map(e => ({...e, dir:'out'}));
+    const inc = STATE.INDEX.edges.filter(e => e.target === id).map(e => ({...e, dir:'in'}));
+    const all = [...out, ...inc];
+    const byType = {};
+    all.forEach(e => { (byType[e.type] = byType[e.type] || []).push(e); });
+    const typeOrder = ['contains','ref','mentions','owns','uses','reports-to','related'];
+    const types = Object.keys(byType).sort((a,b) => {
+      const ai = typeOrder.indexOf(a), bi = typeOrder.indexOf(b);
+      return (ai<0?99:ai) - (bi<0?99:bi);
+    });
+
+    // 2-hop neighbors (nodes connected to my neighbors but not directly to me, and not me)
+    const directIds = new Set(all.map(e => e.dir === 'out' ? e.target : e.source));
+    directIds.add(id);
+    const twoHop = new Map(); // otherId -> {via, viaLabel}
+    STATE.INDEX.edges.forEach(e => {
+      let neighborId = null, otherId = null;
+      if(directIds.has(e.source) && !directIds.has(e.target)){ neighborId = e.source; otherId = e.target; }
+      else if(directIds.has(e.target) && !directIds.has(e.source)){ neighborId = e.target; otherId = e.source; }
+      if(neighborId && otherId && neighborId !== id && !twoHop.has(otherId)){
+        const viaN = STATE.INDEX.nodes.find(nn => nn.id === neighborId);
+        twoHop.set(otherId, { via: neighborId, viaLabel: viaN ? viaN.label : neighborId });
+      }
+    });
+
+    detailBody.innerHTML = `
+      <div class="node-deep">
+        <div class="back-row">
+          <button class="edge-back" id="deep-back">← Back to summary</button>
+        </div>
+
+        <div>
+          <h5>Metadata</h5>
+          <div class="meta-grid">
+            <div class="k">ID</div><div class="v">${escapeHtml(n.id)}</div>
+            <div class="k">Type</div><div class="v">${escapeHtml(n.type || '—')}</div>
+            ${n.kind ? `<div class="k">Kind</div><div class="v">${escapeHtml(n.kind)}</div>` : ''}
+            <div class="k">Category</div><div class="v">${escapeHtml(cat ? cat.name : (n.category || '—'))}</div>
+            <div class="k">Weight</div><div class="v">${n.weight ?? '—'}</div>
+            <div class="k">Highlight</div><div class="v">${n.highlight ? 'true (recently updated)' : 'false'}</div>
+            ${n.parent ? `<div class="k">Parent</div><div class="v">${escapeHtml(n.parent)}</div>` : ''}
+          </div>
+        </div>
+
+        ${(n.summary || n.body) ? `
+        <div>
+          <h5>Description</h5>
+          <div class="deep-body">${escapeHtml([n.summary, n.body].filter(Boolean).join('\n\n'))}</div>
+        </div>` : ''}
+
+        ${n.path ? `
+        <div>
+          <h5>Path</h5>
+          <div class="detail-path">${escapeHtml(n.path)}</div>
+        </div>` : ''}
+
+        <div>
+          <h5>Connections — by type (${all.length} total)</h5>
+          <div class="grouped-edges" id="deep-grouped"></div>
+        </div>
+
+        <div>
+          <h5>2-hop neighbors (${twoHop.size})</h5>
+          <div class="twohop" id="deep-twohop"></div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('deep-back').onclick = () => openDetail(id);
+
+    // Grouped connections — reuse makeLinkRow pattern (icons: info + disconnect)
+    const groupedEl = document.getElementById('deep-grouped');
+    if(types.length === 0){
+      groupedEl.innerHTML = '<div class="empty-note">No connections.</div>';
+    } else {
+      types.forEach(t => {
+        const list = byType[t];
+        const grp = document.createElement('div');
+        grp.className = 'grp';
+        const title = document.createElement('div');
+        title.className = 'grp-title';
+        title.innerHTML = `${escapeHtml(t)} <span class="cnt">(${list.length})</span>`;
+        grp.appendChild(title);
+        list.forEach(e => {
+          const direction = e.dir;
+          const otherId = direction === 'out' ? e.target : e.source;
+          const other = STATE.INDEX.nodes.find(nn => nn.id === otherId);
+          if(!other) return;
+          const row = document.createElement('div');
+          row.className = 'detail-link';
+          const dirArrow = direction === 'out' ? '→' : '←';
+          const annotIndicator = e.annotation ? '<span title="has annotation" style="color:var(--accent);font-size:9px;margin-left:4px">●</span>' : '';
+          row.innerHTML = `
+            <button class="detail-link-main">
+              <span class="ldot ${other.highlight ? 'green':''}"></span>
+              <span class="label">${escapeHtml(other.label)}${annotIndicator}</span>
+              <span class="ltype">${escapeHtml(dirArrow)}</span>
+            </button>
+            <div class="detail-link-actions">
+              <button class="icon-btn info" title="Inspect connection" aria-label="Inspect">ⓘ</button>
+              <button class="icon-btn danger" title="Disconnect" aria-label="Disconnect">✕</button>
+            </div>
+          `;
+          row.querySelector('.detail-link-main').onclick = () => { openDetail(otherId); centerOnNode(other); };
+          row.querySelector('.icon-btn.info').onclick = (ev) => { ev.stopPropagation(); openEdgeInspector(e.source, e.target, e.type, id); };
+          row.querySelector('.icon-btn.danger').onclick = (ev) => { ev.stopPropagation(); quickDisconnect(row, e.source, e.target, e.type, id); };
+          grp.appendChild(row);
+          if(e.annotation){
+            const a = document.createElement('div');
+            a.className = 'annot-line';
+            a.textContent = '\u201C' + e.annotation + '\u201D';
+            grp.appendChild(a);
+          }
+        });
+        groupedEl.appendChild(grp);
+      });
+    }
+
+    // 2-hop neighbors list
+    const twoEl = document.getElementById('deep-twohop');
+    const twoArr = Array.from(twoHop.entries());
+    if(twoArr.length === 0){
+      twoEl.innerHTML = '<div class="empty-note">No 2-hop neighbors.</div>';
+    } else {
+      twoArr.slice(0, 60).forEach(([otherId, info]) => {
+        const other = STATE.INDEX.nodes.find(nn => nn.id === otherId);
+        if(!other) return;
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `
+          <span class="ldot ${other.highlight ? 'green' : ''}"></span>
+          <span>${escapeHtml(other.label)}</span>
+          <span class="via">via ${escapeHtml(info.viaLabel)}</span>
+        `;
+        row.onclick = () => { openDetail(otherId); centerOnNode(other); };
+        twoEl.appendChild(row);
+      });
+      if(twoArr.length > 60){
+        const more = document.createElement('div');
+        more.className = 'empty-note';
+        more.textContent = `…and ${twoArr.length - 60} more`;
+        twoEl.appendChild(more);
+      }
+    }
+
+    detailPanel.classList.add('open');
+    draw();
+  }
+
+  // ============ EDGE INSPECTOR (click ⓘ on any connection in the list)
+  function openEdgeInspector(srcId, tgtId, edgeType, returnToId){
+    const src = STATE.INDEX.nodes.find(n => n.id === srcId);
+    const tgt = STATE.INDEX.nodes.find(n => n.id === tgtId);
+    const edge = STATE.INDEX.edges.find(e => e.source === srcId && e.target === tgtId && e.type === edgeType);
+    if(!src || !tgt || !edge){ return; }
+
+    detailTitle.textContent = 'Connection';
+    detailMeta.textContent = `${src.label}  →  ${tgt.label}`;
+
+    detailBody.innerHTML = `
+      <div class="edge-inspector">
+        <button class="edge-back" id="edge-back">← Back to ${escapeHtml((STATE.INDEX.nodes.find(n=>n.id===returnToId)||src).label)}</button>
+
+        <div class="edge-card">
+          <div class="ec-meta">Source</div>
+          <div class="ec-name"><span class="ldot ${src.highlight?'green':''}"></span>${escapeHtml(src.label)}</div>
+          <div class="ec-body">${escapeHtml(src.summary || src.body || '—')}</div>
+        </div>
+
+        <div class="edge-link-bar">
+          <div class="arrow"></div>
+          <div class="badge">${escapeHtml(edge.type)}</div>
+          <div class="arrow"></div>
+        </div>
+
+        <div class="edge-card">
+          <div class="ec-meta">Target</div>
+          <div class="ec-name"><span class="ldot ${tgt.highlight?'green':''}"></span>${escapeHtml(tgt.label)}</div>
+          <div class="ec-body">${escapeHtml(tgt.summary || tgt.body || '—')}</div>
+        </div>
+
+        <div class="edge-annot-block">
+          <h4>Annotation${edge.annotation ? '' : ' (none)'}</h4>
+          ${edge.annotation ? `<div class="edge-annot-existing">${escapeHtml(edge.annotation)}</div>` : ''}
+          <textarea id="edge-annot" placeholder="Why are these connected? Add nuance or correction…">${escapeHtml(edge.annotation || '')}</textarea>
+          <div class="row" style="display:flex;gap:8px;margin-top:8px;align-items:center">
+            <button class="btn" id="edge-save-annot">Save annotation</button>
+            <button class="btn ghost" id="edge-jump-target" style="margin-left:auto">Jump to ${escapeHtml(tgt.label)} →</button>
+          </div>
+          <div id="edge-annot-result" style="margin-top:8px;font-size:11.5px;color:var(--text-faint)"></div>
+        </div>
+
+        <div class="edge-danger-block">
+          <h4>Disconnect</h4>
+          <div class="desc">
+            High-level disconnect removes the link entirely. Detailed disconnect also records why, so I learn the pattern and don't reconnect them automatically.
+          </div>
+          <textarea id="edge-reason" placeholder="(Optional) Why disconnect? e.g. 'These aren't actually related — Karl never worked with Cross Mgmt.'"></textarea>
+          <div class="row" style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <button class="btn danger" id="edge-disconnect-detailed">Disconnect with reason</button>
+            <button class="btn danger ghost" id="edge-disconnect-quick">Disconnect</button>
+          </div>
+          <div id="edge-disc-result" style="margin-top:8px;font-size:11.5px;color:var(--text-faint)"></div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('edge-back').onclick = () => openDetail(returnToId);
+    document.getElementById('edge-jump-target').onclick = () => { openDetail(tgtId); centerOnNode(tgt); };
+    document.getElementById('edge-save-annot').onclick = () => annotateEdge(srcId, tgtId, edgeType, document.getElementById('edge-annot').value, returnToId);
+    document.getElementById('edge-disconnect-detailed').onclick = () => disconnectEdge(srcId, tgtId, edgeType, document.getElementById('edge-reason').value.trim(), returnToId);
+    document.getElementById('edge-disconnect-quick').onclick = () => disconnectEdge(srcId, tgtId, edgeType, '', returnToId);
+  }
+
+  async function annotateEdge(srcId, tgtId, edgeType, annotation, returnToId){
+    const ann = (annotation||'').trim();
+    if(!ann){ document.getElementById('edge-annot-result').textContent = 'Type something first.'; return; }
+    // Mutate in memory
+    const edge = STATE.INDEX.edges.find(e => e.source === srcId && e.target === tgtId && e.type === edgeType);
+    if(edge) edge.annotation = ann;
+    // Persist
+    const ts = new Date().toISOString();
+    const payload = {
+      kind: 'BRAIN_PENDING',
+      generatedAt: ts,
+      source: 'brain-map.html',
+      action: 'annotate-edge',
+      edge: { source: srcId, target: tgtId, type: edgeType },
+      annotation: ann
+    };
+    const fname = `brain-pending-annot-${ts.replace(/[:.]/g,'-')}.json`;
+    const res = await writePending(fname, JSON.stringify(payload, null, 2));
+    STATE.FEED.unshift({ ts, actor:'kam', op:'annotate-edge', target: tgtId, note: `${(STATE.INDEX.nodes.find(n=>n.id===srcId)||{}).label} → ${(STATE.INDEX.nodes.find(n=>n.id===tgtId)||{}).label} (${edgeType}): ${ann}` });
+    renderFeed();
+    document.getElementById('edge-annot-result').innerHTML = res.mode === 'direct'
+      ? `Saved. Claude will sync into <code>index.js</code> next session.`
+      : `Downloaded <code>${escapeHtml(fname)}</code>. Move to pending/ or paste SYNC BRAIN.`;
+    toast('Annotation saved', true);
+  }
+
+  async function disconnectEdge(srcId, tgtId, edgeType, reason, returnToId){
+    // Remove from in-memory index
+    const idx = STATE.INDEX.edges.findIndex(e => e.source === srcId && e.target === tgtId && e.type === edgeType);
+    if(idx < 0){ document.getElementById('edge-disc-result').textContent = 'Already disconnected.'; return; }
+    STATE.INDEX.edges.splice(idx, 1);
+    // Persist
+    const ts = new Date().toISOString();
+    const payload = {
+      kind: 'BRAIN_PENDING',
+      generatedAt: ts,
+      source: 'brain-map.html',
+      action: 'remove-edge',
+      edge: { source: srcId, target: tgtId, type: edgeType },
+      reason: reason || null
+    };
+    const fname = `brain-pending-disc-${ts.replace(/[:.]/g,'-')}.json`;
+    const res = await writePending(fname, JSON.stringify(payload, null, 2));
+    const srcLabel = (STATE.INDEX.nodes.find(n=>n.id===srcId)||{}).label || srcId;
+    const tgtLabel = (STATE.INDEX.nodes.find(n=>n.id===tgtId)||{}).label || tgtId;
+    STATE.FEED.unshift({ ts, actor:'kam', op:'disconnect', target: tgtId, note: `Disconnected ${srcLabel} → ${tgtLabel} (${edgeType})${reason ? ': ' + reason : ''}` });
+    renderFeed();
+    // Restart sim so graph reflects the change
+    restart();
+    document.getElementById('edge-disc-result').innerHTML = res.mode === 'direct'
+      ? `Disconnected. Saved to pending — Claude will purge from <code>index.js</code> next session.`
+      : `Disconnected locally. Downloaded <code>${escapeHtml(fname)}</code> — move to pending/ or paste SYNC BRAIN.`;
+    toast('Disconnected', true);
+    // Auto-return to source detail after a beat
+    setTimeout(() => openDetail(returnToId), 900);
+  }
+
+  // Quick disconnect from list row (no inspector) — with inline confirm
+  function quickDisconnect(rowEl, srcId, tgtId, edgeType, returnToId){
+    // Replace row actions with inline confirm
+    const actions = rowEl.querySelector('.detail-link-actions');
+    const original = actions.innerHTML;
+    actions.innerHTML = `
+      <span class="inline-confirm">
+        Disconnect?
+        <button class="icon-btn danger" id="qd-yes" title="Confirm">✓</button>
+        <button class="icon-btn" id="qd-no" title="Cancel">↺</button>
+      </span>
+    `;
+    actions.style.opacity = '1';
+    actions.querySelector('#qd-yes').onclick = (e) => {
+      e.stopPropagation();
+      disconnectEdge(srcId, tgtId, edgeType, '', returnToId);
+    };
+    actions.querySelector('#qd-no').onclick = (e) => {
+      e.stopPropagation();
+      actions.innerHTML = original;
+      actions.style.opacity = '';
+      // Re-wire buttons since innerHTML wipes listeners — easiest: re-render detail panel
+      openDetail(returnToId);
+    };
+  }
+
+  function centerOnNode(n){
+    // Pan so node is centered on screen
+    const targetK = Math.max(STATE.transform.k, 0.9);
+    STATE.transform.k = targetK;
+    STATE.transform.x = W/2 - n.x * targetK;
+    STATE.transform.y = H/2 - n.y * targetK;
+    draw();
+  }
+
+  // ============ FILE SYSTEM ACCESS (for zero-action edits)
+  // Persists directory handle in IndexedDB so once granted, future loads can write silently.
+
+  const IDB_NAME = 'brain-map';
+  const IDB_STORE = 'handles';
+
+  function openIdb(){
+    return new Promise((res, rej) => {
+      const r = indexedDB.open(IDB_NAME, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbGet(key){
+    const db = await openIdb();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  }
+  async function idbSet(key, val){
+    const db = await openIdb();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const req = tx.objectStore(IDB_STORE).put(val, key);
+      req.onsuccess = () => res();
+      req.onerror = () => rej(req.error);
+    });
+  }
+
+  async function tryRestoreHandle(){
+    if(!('showDirectoryPicker' in window)) return; // not supported (Safari/Firefox)
+    try {
+      const handle = await idbGet('brainDirHandle');
+      if(!handle) { showConnectBanner(); return; }
+      // verify permission
+      const perm = await handle.queryPermission({ mode: 'readwrite' });
+      if(perm === 'granted'){
+        STATE.dirHandle = handle;
+        toast('Brain folder connected · auto-write enabled', true);
+      } else {
+        // need re-grant
+        showConnectBanner();
+      }
+    } catch(err){
+      showConnectBanner();
+    }
+  }
+  function showConnectBanner(){
+    if('showDirectoryPicker' in window){
+      connectBanner.classList.remove('hidden');
+    }
+  }
+  connectBtn.addEventListener('click', async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ id: 'brain-folder', mode: 'readwrite' });
+      const perm = await handle.requestPermission({ mode: 'readwrite' });
+      if(perm !== 'granted'){ toast('Permission denied', false); return; }
+      STATE.dirHandle = handle;
+      await idbSet('brainDirHandle', handle);
+      connectBanner.classList.add('hidden');
+      toast('Brain folder connected · auto-write enabled', true);
+    } catch(e){
+      // user cancelled - silent
+    }
+  });
+  connectSkip.addEventListener('click', () => connectBanner.classList.add('hidden'));
+
+  async function writePending(filename, contents){
+    // Writes a file under the connected dir, or downloads if no handle.
+    if(STATE.dirHandle){
+      try {
+        const fh = await STATE.dirHandle.getFileHandle(filename, { create: true });
+        const w = await fh.createWritable();
+        await w.write(contents);
+        await w.close();
+        return { mode: 'direct', filename };
+      } catch(e){
+        // fall through to download
+      }
+    }
+    // Fallback: download as file so user (or scheduled-task poller) picks it up
+    const blob = new Blob([contents], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return { mode: 'download', filename };
+  }
+
+  async function saveFact(nodeId){
+    const txt = document.getElementById('edit-text').value.trim();
+    if(!txt){ document.getElementById('edit-result').textContent = 'Type something first.'; return; }
+    const node = STATE.INDEX.nodes.find(n => n.id === nodeId);
+    const ts = new Date().toISOString();
+    const fname = `brain-pending-${ts.replace(/[:.]/g,'-')}.json`;
+    const payload = {
+      kind: 'BRAIN_PENDING',
+      generatedAt: ts,
+      source: 'brain-map.html',
+      action: 'add-fact',
+      target: { id: nodeId, label: node.label, path: node.path || null },
+      fact: txt
+    };
+    const res = await writePending(fname, JSON.stringify(payload, null, 2));
+    const resEl = document.getElementById('edit-result');
+    if(res.mode === 'direct'){
+      resEl.innerHTML = `Saved to <code>brain-map/pending/${escapeHtml(fname)}</code>. Claude will pick this up on next session-start and write to the brain file.`;
+      toast('Saved · Claude will sync it', true);
+    } else {
+      resEl.innerHTML = `Downloaded <code>${escapeHtml(fname)}</code>. Move to <code>~/Desktop/Claude Files/Claude Apps/brain-map/pending/</code> (or paste the SYNC BRAIN block).`;
+      toast('Downloaded · drop in pending/ or paste SYNC BRAIN', true);
+    }
+    // Also append to local feed visually for instant feedback
+    STATE.FEED.unshift({ ts, actor:'kam', op:'add-fact', target: nodeId, note: txt });
+    renderFeed();
+    document.getElementById('edit-text').value = '';
+  }
+
+  async function copyFact(nodeId){
+    const txt = document.getElementById('edit-text').value.trim();
+    if(!txt){ document.getElementById('edit-result').textContent = 'Type something first.'; return; }
+    const node = STATE.INDEX.nodes.find(n => n.id === nodeId);
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      source: 'brain-map.html',
+      actions: [{
+        type: 'add-fact',
+        targetId: nodeId,
+        targetLabel: node.label,
+        targetPath: node.path || null,
+        fact: txt
+      }]
+    };
+    const text = `SYNC BRAIN ACTIONS:\n${JSON.stringify(payload, null, 2)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      document.getElementById('edit-result').textContent = 'Copied. Paste into chat with Claude.';
+      toast('Copied SYNC BRAIN block', true);
+    } catch(e){
+      document.getElementById('edit-result').textContent = 'Clipboard blocked. Use Save instead.';
+    }
+  }
+
+  // ============ UTIL
+  function escapeHtml(s){
+    return String(s||'').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+  function fmtTs(iso){
+    const d = new Date(iso);
+    if(isNaN(d)) return iso;
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const yest = new Date(today); yest.setDate(today.getDate()-1);
+    const isYest = d.toDateString() === yest.toDateString();
+    const time = d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    if(isToday) return `Today · ${time}`;
+    if(isYest) return `Yesterday · ${time}`;
+    return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ` · ${time}`;
+  }
+  function toast(msg, green){
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (green ? ' green' : '');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toastEl.className = 'toast', 2400);
+  }
+
+  // ============ STATS
+  statNodes.textContent = `${STATE.INDEX.nodes.length} nodes · ${STATE.INDEX.edges.length} edges`;
+
+  // ============ BOOT
+  restart();
+  tryRestoreHandle();
+
+  // Auto-center after initial settling
+  setTimeout(() => {
+    // Find bounding box of all nodes, then fit-to-screen
+    if(!GRAPH.nodes.length) return;
+    let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+    GRAPH.nodes.forEach(n => {
+      if(n.x<minX) minX=n.x; if(n.x>maxX) maxX=n.x;
+      if(n.y<minY) minY=n.y; if(n.y>maxY) maxY=n.y;
+    });
+    const pad = 80;
+    const dw = (maxX-minX) + pad*2;
+    const dh = (maxY-minY) + pad*2;
+    const k = Math.min(W/dw, H/dh, 1.0);
+    STATE.transform.k = k;
+    STATE.transform.x = W/2 - ((minX+maxX)/2) * k;
+    STATE.transform.y = H/2 - ((minY+maxY)/2) * k;
+    draw();
+  }, 1800);
+
+</script>
+
+</body>
+</html>
